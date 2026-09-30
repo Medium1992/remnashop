@@ -19,6 +19,7 @@ from src.application.use_cases.promocode.queries.validate import (
 )
 from src.core.enums import PromocodeRewardType, SubscriptionStatus
 from src.core.utils.converters import days_to_datetime
+from src.core.utils.remna_id import remna_key
 from src.core.utils.time import datetime_now
 
 
@@ -252,7 +253,7 @@ class ActivatePromocode(Interactor[ActivatePromocodeDto, PromocodeDto]):
             return _PendingReward(subscription_update=subscription)
         created = await self.remnawave.create_user(user=user, plan=plan)
         new_sub = SubscriptionDto(
-            user_remna_id=created.uuid,
+            user_remna_id=remna_key(created),
             status=SubscriptionStatus(created.status),
             traffic_limit=plan.traffic_limit,
             device_limit=plan.device_limit,

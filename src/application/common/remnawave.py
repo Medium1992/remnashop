@@ -2,7 +2,12 @@ from typing import List, Optional, Protocol, TypeVar, Union
 from uuid import UUID
 
 from packaging.version import Version
-from remnapy.models import UserResponseDto
+from remnapy.models import (
+    GetExternalSquadByUuidResponseDto,
+    HostResponseDto,
+    NodeResponseDto,
+    UserResponseDto,
+)
 from remnapy.models.hwid import HwidDeviceDto
 
 from src.application.dto import (
@@ -66,6 +71,30 @@ class Remnawave(Protocol):
     async def get_internal_squads(self) -> List[SquadInfoDto]: ...
 
     async def get_external_squads(self) -> List[SquadInfoDto]: ...
+
+    async def get_external_squad(
+        self,
+        uuid: UUID,
+    ) -> Optional[GetExternalSquadByUuidResponseDto]: ...
+
+    async def get_nodes(self) -> List[NodeResponseDto]: ...
+
+    async def get_node(self, uuid: UUID) -> Optional[NodeResponseDto]: ...
+
+    async def get_hosts(self) -> List[HostResponseDto]: ...
+
+    async def resolve_legacy_identity(
+        self,
+        stored: UUID,
+        subscription_url: Optional[str] = None,
+        username: Optional[str] = None,
+    ) -> Optional[int]: ...
+    """Find the panel user behind a uuid written by an older RemnaShop.
+
+    Returns the panel's numeric user id, or None when the user cannot be matched
+    at all -- in which case the stored value must be left alone rather than
+    replaced with a guess.
+    """
 
     def apply_sync(
         self,

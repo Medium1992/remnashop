@@ -20,6 +20,7 @@ from src.application.services import (
     PricingService,
     RemnaWebhookService,
 )
+from src.application.use_cases.remnawave.commands.identity import BackfillRemnaIdentity
 from src.infrastructure.services import (
     AiogramFileDownloader,
     AiohttpClient,
@@ -63,6 +64,7 @@ class ServicesProvider(Provider):
 
     remnawave = provide(source=RemnawaveImpl, provides=Remnawave)
     remna_webhook = provide(source=RemnaWebhookService, scope=Scope.REQUEST)
+    remna_identity_backfill = provide(source=BackfillRemnaIdentity, scope=Scope.REQUEST)
 
     notification_queue = provide(source=NotificationQueue)
     notification_worker = provide(source=NotificationWorker)

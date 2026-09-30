@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from adaptix import Retort
 from aiogram import Dispatcher
@@ -22,9 +22,10 @@ from src.application.events import (
 )
 from src.application.events.system import RemnashopWelcomeEvent
 from src.application.use_cases.gateways.commands.payment import CreateDefaultPaymentGateway
+from src.application.use_cases.remnawave.commands.identity import BackfillRemnaIdentity
 from src.application.use_cases.settings.commands.defaults import CreateDefaultSettings
 from src.core.config import AppConfig
-from src.core.constants import REMNAWAVE_MAX_VERSION
+from src.core.panel import is_ahead_of_known
 from src.core.utils.i18n_helpers import i18n_format_seconds
 from src.core.utils.time import get_uptime
 from src.infrastructure.redis.keys import WelcomedVersionKey
@@ -56,7 +57,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         settings_dao = await startup_container.get(SettingsDao)
         webhook_service = await startup_container.get(WebhookService)
         command_service = await startup_container.get(CommandService)
-        remnawave_service = await startup_container.get(Remnawave)
         create_default_payment_gateway = await startup_container.get(CreateDefaultPaymentGateway)
         create_default_settings = await startup_container.get(CreateDefaultSettings)
         redis = await startup_container.get(Redis)
@@ -133,20 +133,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     await event_bus.publish(bot_startup_event)
 
+    panel_retry: Optional[asyncio.Task[None]] = None
     try:
-        panel_version = await remnawave_service.try_connection()
-        if panel_version >= REMNAWAVE_MAX_VERSION:
-            await event_bus.publish(
-                RemnawaveVersionWarningEvent(
-                    **config.build.data,
-                    panel_version=str(panel_version),
-                )
-            )
+        await connect_panel(container, config, event_bus)
     except Exception as e:
         remnawave_error_event = RemnawaveErrorEvent(**config.build.data, exception=e)
         await event_bus.publish(remnawave_error_event)
+        # Typical right after a panel upgrade: the panel is still running its
+        # own migrations when the bot comes up. Keep trying in the background,
+        # so the identity backfill still happens without anyone restarting us.
+        panel_retry = asyncio.create_task(retry_panel(container, config, event_bus))
 
     yield
+
+    if panel_retry is not None:
+        panel_retry.cancel()
 
     bot_shutdown_event = BotShutdownEvent(
         **config.build.data,
@@ -162,3 +163,58 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await command_service.delete_commands()
     await webhook_service.delete_webhook()
     await container.close()
+
+
+# Between attempts once the panel was unreachable at startup.
+PANEL_RETRY_INTERVAL = 30.0
+
+
+async def connect_panel(
+    container: AsyncContainer,
+    config: AppConfig,
+    event_bus: EventBusImpl,
+) -> None:
+    """Handshake with the panel, then re-key any rows an older build left behind.
+
+    Runs in a scope of its own: the backfill writes, and it needs a session that
+    is still open and a transaction it can commit.
+    """
+    async with container(scope=Scope.REQUEST) as scope:
+        remnawave = await scope.get(Remnawave)
+        backfill = await scope.get(BackfillRemnaIdentity)
+
+        panel_version = await remnawave.try_connection()
+
+        # Only meaningful once the panel line is known: on 3.x a legacy row is
+        # resolved through the shortUuid in its stored url, on 2.x through the
+        # uuid it already holds.
+        await backfill.run()
+
+    if is_ahead_of_known(panel_version):
+        await event_bus.publish(
+            RemnawaveVersionWarningEvent(
+                **config.build.data,
+                panel_version=str(panel_version),
+            )
+        )
+
+
+async def retry_panel(
+    container: AsyncContainer,
+    config: AppConfig,
+    event_bus: EventBusImpl,
+    interval: float = PANEL_RETRY_INTERVAL,
+) -> None:
+    """Keep trying :func:`connect_panel` until it succeeds or the app stops."""
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await connect_panel(container, config, event_bus)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"Remnawave panel still unreachable, retrying in {interval:.0f}s: {e}")
+            continue
+
+        logger.info("Remnawave panel reached after startup; identity backfill done")
+        return

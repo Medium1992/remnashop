@@ -1,0 +1,16 @@
+# Test image: the project's exact locked dependency set plus the dev group,
+# so unit tests run against the same resolution the production image gets.
+FROM ghcr.io/astral-sh/uv:python3.12-alpine
+
+WORKDIR /opt/remnashop
+RUN apk add --no-cache git
+
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked
+
+ENV PATH="/opt/remnashop/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/opt/remnashop
+ENV PYTHONDONTWRITEBYTECODE=1
+
+CMD ["pytest", "-q"]

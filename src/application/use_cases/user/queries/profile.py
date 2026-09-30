@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from loguru import logger
-from remnapy import RemnawaveSDK
 from remnapy.models import GetExternalSquadByUuidResponseDto
 from remnapy.models.hwid import HwidDeviceDto
 
@@ -90,12 +89,10 @@ class GetUserProfileSubscription(Interactor[int, GetUserProfileSubscriptionResul
         user_dao: UserDao,
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
-        remnawave_sdk: RemnawaveSDK,
     ) -> None:
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
-        self.remnawave_sdk = remnawave_sdk
 
     async def _execute(
         self,
@@ -116,7 +113,7 @@ class GetUserProfileSubscription(Interactor[int, GetUserProfileSubscriptionResul
         last_node = None
         if remna_user.last_connected_node_uuid:
             try:
-                last_node = await self.remnawave_sdk.nodes.get_one_node(
+                last_node = await self.remnawave.get_node(
                     remna_user.last_connected_node_uuid
                 )
             except Exception as e:
@@ -126,8 +123,8 @@ class GetUserProfileSubscription(Interactor[int, GetUserProfileSubscriptionResul
 
         external_squad = None
         if remna_user.external_squad_uuid:
-            external_squad = await self.remnawave_sdk.external_squads.get_external_squad_by_uuid(
-                uuid=remna_user.external_squad_uuid
+            external_squad = await self.remnawave.get_external_squad(
+                remna_user.external_squad_uuid
             )
 
         return GetUserProfileSubscriptionResultDto(

@@ -5,10 +5,9 @@ from adaptix import Retort
 from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
-from remnapy import RemnawaveSDK
 from remnapy.exceptions import NotFoundError
 
-from src.application.common import TranslatorRunner
+from src.application.common import Remnawave, TranslatorRunner
 from src.application.common.dao import (
     PlanDao,
     ReferralDao,
@@ -638,7 +637,7 @@ async def sync_getter(  # noqa: C901
     i18n: FromDishka[TranslatorRunner],
     user_dao: FromDishka[UserDao],
     subscription_dao: FromDishka[SubscriptionDao],
-    remnawave_sdk: FromDishka[RemnawaveSDK],
+    remnawave: FromDishka[Remnawave],
     **kwargs: Any,
 ) -> dict[str, Any]:
     target_user_id = dialog_manager.dialog_data[TARGET_USER_ID]
@@ -653,9 +652,7 @@ async def sync_getter(  # noqa: C901
 
     if target_user.telegram_id:
         try:
-            result = await remnawave_sdk.users.get_users_by_telegram_id(
-                telegram_id=str(target_user.telegram_id)
-            )
+            result = await remnawave.get_users_by_telegram_id(target_user.telegram_id)
             if result:
                 remna_user: RemnaUserDto = result[0]
                 remna_sub = RemnaSubscriptionDto.from_remna_user(remna_user)
@@ -663,8 +660,8 @@ async def sync_getter(  # noqa: C901
         except NotFoundError:
             pass
 
-    squads_res = await remnawave_sdk.internal_squads.get_internal_squads()
-    squads_map = {s.uuid: s.name for s in squads_res.internal_squads}
+    squads = await remnawave.get_internal_squads()
+    squads_map = {s.uuid: s.name for s in squads}
 
     def format_subscription(sub: Union[None, SubscriptionDto, RemnaSubscriptionDto]) -> str:
         if not sub:

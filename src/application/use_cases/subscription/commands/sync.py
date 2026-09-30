@@ -14,6 +14,7 @@ from src.application.use_cases.subscription.queries.match import (
     MatchSubscriptionDto,
 )
 from src.core.enums import SubscriptionStatus
+from src.core.utils.remna_id import remna_key
 
 
 class CheckSubscriptionSyncState(Interactor[int, bool]):
@@ -148,9 +149,9 @@ class SyncSubscriptionFromRemnashop(Interactor[int, None]):
                         target_user.telegram_id
                     )
                     if remna_users:
-                        await self.remnawave.delete_user(remna_users[0].uuid)
+                        await self.remnawave.delete_user(remna_key(remna_users[0]))
                         logger.info(
-                            f"{actor.log} Deleted user '{remna_users[0].uuid}' from remnapy "
+                            f"{actor.log} Deleted user '{remna_users[0].id}' from remnapy "
                             f"due to missing local subscription"
                         )
             else:

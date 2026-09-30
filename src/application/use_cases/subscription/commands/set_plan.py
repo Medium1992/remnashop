@@ -8,6 +8,7 @@ from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, UserDto
 from src.core.enums import SubscriptionStatus
+from src.core.utils.remna_id import remna_key
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ class SetUserSubscription(Interactor[SetUserSubscriptionDto, None]):
                 remna_user = await self.remnawave.create_user(user=target_user, plan=plan_snapshot)
 
             new_subscription = SubscriptionDto(
-                user_remna_id=remna_user.uuid,
+                user_remna_id=remna_key(remna_user),
                 status=SubscriptionStatus(remna_user.status),
                 traffic_limit=plan.traffic_limit,
                 device_limit=plan.device_limit,

@@ -10,8 +10,15 @@ from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.common.dao import SubscriptionDao, UserDao
-from src.application.dto import PlanSubStatsDto, SubscriptionDto, SubscriptionStatsDto
+from src.application.dto import (
+    LegacyIdentityDto,
+    PlanSubStatsDto,
+    SubscriptionDto,
+    SubscriptionStatsDto,
+)
+from src.core.constants import REMNASHOP_PREFIX, WEB_PREFIX
 from src.core.enums import SubscriptionStatus
+from src.core.utils.remna_id import SYNTHETIC_UPPER_BOUND
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.models import Subscription, User
 
@@ -155,6 +162,58 @@ class SubscriptionDaoImpl(SubscriptionDao, BaseDaoImpl):
 
         logger.warning(f"Failed to update subscription '{subscription_id}': not found")
         return None
+
+    async def get_legacy_identities(
+        self,
+        limit: int,
+        after_id: int = 0,
+    ) -> list[LegacyIdentityDto]:
+        """Subscriptions still keyed by a real panel uuid rather than an id.
+
+        A synthetic key has its top 80 bits zero, so everything at or above the
+        boundary was written by an older RemnaShop and has to be re-resolved.
+
+        ``after_id`` is a cursor: rows that cannot be resolved stay legacy, so
+        without it every call would return the same head of the table and the
+        rows behind it would never be reached.
+        """
+        query = (
+            select(
+                Subscription.id,
+                Subscription.user_remna_id,
+                Subscription.url,
+                User.telegram_id,
+                User.id.label("local_user_id"),
+            )
+            .join(User, User.id == Subscription.user_id)
+            .where(Subscription.user_remna_id >= SYNTHETIC_UPPER_BOUND)
+            .where(Subscription.id > after_id)
+            .order_by(Subscription.id)
+            .limit(limit)
+        )
+
+        rows = (await self.session.execute(query)).all()
+
+        return [
+            LegacyIdentityDto(
+                subscription_id=row.id,
+                user_remna_id=row.user_remna_id,
+                url=row.url or "",
+                username=(
+                    f"{REMNASHOP_PREFIX}{row.telegram_id}"
+                    if row.telegram_id is not None
+                    else f"{REMNASHOP_PREFIX}{WEB_PREFIX}{row.local_user_id}"
+                ),
+            )
+            for row in rows
+        ]
+
+    async def rewrite_remna_id(self, subscription_id: int, remna_id: UUID) -> None:
+        await self.session.execute(
+            update(Subscription)
+            .where(Subscription.id == subscription_id)
+            .values(user_remna_id=remna_id)
+        )
 
     async def exists(self, user_remna_id: UUID) -> bool:
         stmt = select(

@@ -1,7 +1,12 @@
 from typing import Optional, Protocol, runtime_checkable
 from uuid import UUID
 
-from src.application.dto import PlanSubStatsDto, SubscriptionDto, SubscriptionStatsDto
+from src.application.dto import (
+    LegacyIdentityDto,
+    PlanSubStatsDto,
+    SubscriptionDto,
+    SubscriptionStatsDto,
+)
 from src.core.enums import SubscriptionStatus
 
 
@@ -24,6 +29,14 @@ class SubscriptionDao(Protocol):
         subscription_id: int,
         status: SubscriptionStatus,
     ) -> Optional[SubscriptionDto]: ...
+
+    async def get_legacy_identities(
+        self,
+        limit: int,
+        after_id: int = 0,
+    ) -> list[LegacyIdentityDto]: ...
+
+    async def rewrite_remna_id(self, subscription_id: int, remna_id: UUID) -> None: ...
 
     async def exists(self, remna_id: UUID) -> bool: ...
 

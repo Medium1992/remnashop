@@ -6,14 +6,15 @@ from loguru import logger
 from remnapy import RemnawaveSDK
 
 from src.core.config import AppConfig
+from src.core.types import RemnawaveHttpClient
 
 
 class RemnawaveProvider(Provider):
     scope = Scope.APP
 
     @provide
-    async def get_remnawave(self, config: AppConfig) -> AsyncIterator[RemnawaveSDK]:
-        logger.debug("Initializing RemnawaveSDK")
+    async def get_http_client(self, config: AppConfig) -> AsyncIterator[RemnawaveHttpClient]:
+        logger.debug("Initializing Remnawave HTTP client")
 
         headers = {}
         headers["Authorization"] = f"Bearer {config.remnawave.token.get_secret_value()}"
@@ -34,7 +35,15 @@ class RemnawaveProvider(Provider):
         )
 
         try:
-            yield RemnawaveSDK(client)
+            yield RemnawaveHttpClient(client)
         finally:
             await client.aclose()
-            logger.debug("RemnawaveSDK AsyncClient closed")
+            logger.debug("Remnawave AsyncClient closed")
+
+    @provide
+    def get_remnawave(self, client: RemnawaveHttpClient) -> RemnawaveSDK:
+        # The SDK and the panel client for the 2.x contract share one connection
+        # pool and one set of auth headers, so a call made through either is
+        # authenticated and routed identically.
+        logger.debug("Initializing RemnawaveSDK")
+        return RemnawaveSDK(client)

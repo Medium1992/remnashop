@@ -6,6 +6,7 @@ from aiogram.types import (
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
 )
+from httpx import AsyncClient
 from pydantic import PlainValidator
 from remnapy.models import UserResponseDto
 from remnapy.models.webhook import UserDto as UserWebhookDto
@@ -18,6 +19,10 @@ if TYPE_CHECKING:
 else:
     ListStr = NewType("ListStr", list[str])
     ListLocale = NewType("ListLocale", list[Locale])
+
+# The authenticated connection to the panel. Distinct from a bare AsyncClient so
+# the container cannot hand it to something that wants a generic HTTP client.
+RemnawaveHttpClient = NewType("RemnawaveHttpClient", AsyncClient)
 
 AnyKeyboard: TypeAlias = Union[
     InlineKeyboardMarkup,

@@ -1,0 +1,20 @@
+# The container entrypoint is executed by the kernel, which reads the shebang
+# byte for byte. A checkout on a machine with core.autocrlf=true would give it
+# CRLF endings, and the resulting image fails to start with a message that names
+# the interpreter rather than the script:
+#
+#   exec ./docker-entrypoint.sh: no such file or directory
+#
+# because /bin/sh\r does not exist. Pinning LF keeps an image built on any
+# platform runnable on the Linux host it is deployed to.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Everything else that is read inside the container. Python tolerates CRLF, but
+# there is no reason for it to differ between a Windows and a Linux checkout.
+*.py text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.yml text eol=lf
+*.lock text eol=lf
+Dockerfile* text eol=lf

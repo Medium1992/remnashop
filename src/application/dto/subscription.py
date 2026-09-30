@@ -9,10 +9,26 @@ from src.core.constants import UNLIMITED_EXPIRE_YEAR
 from src.core.enums import PlanType, SubscriptionStatus
 from src.core.types import RemnaUserDto
 from src.core.utils.converters import bytes_to_gb
+from src.core.utils.remna_id import remna_key
 from src.core.utils.time import datetime_now
 
 from .base import BaseDto, TimestampMixin, TrackableMixin
 from .plan import PlanSnapshotDto
+
+
+@dataclass(frozen=True)
+class LegacyIdentityDto:
+    """A subscription still keyed by a real 2.x panel uuid.
+
+    Carries the two identifiers that survive a panel upgrade, so the panel user
+    can be found again once the uuid itself is gone: the shortUuid embedded in
+    the subscription url, and the username RemnaShop would have given them.
+    """
+
+    subscription_id: int
+    user_remna_id: UUID
+    url: str
+    username: str
 
 
 @dataclass(frozen=True)
@@ -39,11 +55,11 @@ class RemnaSubscriptionDto:
     @classmethod
     def from_remna_user(cls, remna_user: RemnaUserDto) -> "RemnaSubscriptionDto":
         return cls(
-            uuid=remna_user.uuid,
+            uuid=remna_key(remna_user),
             status=SubscriptionStatus(remna_user.status),
             expire_at=remna_user.expire_at,
             url=remna_user.subscription_url,
-            traffic_limit=bytes_to_gb(remna_user.traffic_limit_bytes),
+            traffic_limit=bytes_to_gb(int(remna_user.traffic_limit_bytes)),
             device_limit=remna_user.hwid_device_limit or 0,
             traffic_limit_strategy=TrafficLimitStrategy(remna_user.traffic_limit_strategy),
             tag=remna_user.tag,

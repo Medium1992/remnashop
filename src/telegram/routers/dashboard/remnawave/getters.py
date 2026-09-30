@@ -7,7 +7,7 @@ from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 from remnapy import RemnawaveSDK
 
-from src.application.common import TranslatorRunner
+from src.application.common import Remnawave, TranslatorRunner
 from src.core.utils.converters import country_code_to_flag, percent
 from src.core.utils.i18n_helpers import i18n_format_bytes_to_unit, i18n_format_seconds
 
@@ -58,7 +58,7 @@ async def users_getter(
 @inject
 async def hosts_getter(
     dialog_manager: DialogManager,
-    remnawave_sdk: FromDishka[RemnawaveSDK],
+    remnawave: FromDishka[Remnawave],
     i18n: FromDishka[TranslatorRunner],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -68,7 +68,7 @@ async def hosts_getter(
         raise ValueError()
 
     current_page = await widget.get_page()
-    result = await remnawave_sdk.hosts.get_all_hosts()
+    result = await remnawave.get_hosts()
     hosts = []
 
     for host in result:
@@ -97,7 +97,7 @@ async def hosts_getter(
 @inject
 async def nodes_getter(
     dialog_manager: DialogManager,
-    remnawave_sdk: FromDishka[RemnawaveSDK],
+    remnawave: FromDishka[Remnawave],
     i18n: FromDishka[TranslatorRunner],
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -107,7 +107,7 @@ async def nodes_getter(
         raise ValueError()
 
     current_page = await widget.get_page()
-    result = await remnawave_sdk.nodes.get_all_nodes()
+    result = await remnawave.get_nodes()
     nodes = []
 
     for node in result:
