@@ -10,6 +10,9 @@ class BuildConfig(BaseConfig, env_prefix="BUILD_"):
     branch: Optional[str] = None
     commit: Optional[str] = None
     tag: Optional[str] = None
+    # Where this build's commit lives. A fork builds from its own repository, so
+    # a link into the upstream one would point at a commit that is not there.
+    repository: Optional[str] = None
 
     @property
     def is_set(self) -> bool:
@@ -17,7 +20,7 @@ class BuildConfig(BaseConfig, env_prefix="BUILD_"):
 
     @property
     def commit_url(self) -> str:
-        return f"{REPOSITORY}/commit/{self.commit}"
+        return f"{(self.repository or REPOSITORY).rstrip('/')}/commit/{self.commit}"
 
     @property
     def data(self) -> dict:

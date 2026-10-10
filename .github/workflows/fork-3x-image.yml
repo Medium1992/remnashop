@@ -65,6 +65,10 @@ jobs:
     steps:
       - name: 🧾 Checkout Repository
         uses: actions/checkout@v4
+        with:
+          # Full history and tags: the build is labelled with the upstream
+          # release it is based on.
+          fetch-depth: 0
 
       - name: 🛠️ Set Up QEMU
         uses: docker/setup-qemu-action@v3
@@ -93,10 +97,23 @@ jobs:
             TAGS="${TAGS},${IMAGE}:${GITHUB_REF_NAME}"
           fi
 
+          # The app compares its build tag against upstream releases once an
+          # hour, so it has to be a real version. "<upstream release>+3x" is
+          # one: it sorts just above the release this is built on, and the next
+          # upstream release still registers as an update.
+          BASE=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+          if [[ -n "${BASE}" ]]; then
+            BUILD_TAG="${BASE}+3x"
+          else
+            BUILD_TAG="dev"
+          fi
+
+          echo "build_tag=${BUILD_TAG}" >> "$GITHUB_OUTPUT"
           echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           echo "✅ Tags: ${TAGS}"
+          echo "✅ Build tag: ${BUILD_TAG}"
 
       - name: 🏗️ Build and Push Image
         uses: docker/build-push-action@v5
@@ -115,4 +132,5 @@ jobs:
             BUILD_TIME=${{ steps.vars.outputs.build_time }}
             BUILD_BRANCH=${{ github.ref_name }}
             BUILD_COMMIT=${{ steps.vars.outputs.short_sha }}
-            BUILD_TAG=3x
+            BUILD_TAG=${{ steps.vars.outputs.build_tag }}
+            BUILD_REPOSITORY=${{ github.server_url }}/${{ github.repository }}
