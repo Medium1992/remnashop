@@ -35,7 +35,7 @@ from src.application.use_cases.remnawave.commands.synchronization import (
 )
 from src.core.config import AppConfig
 from src.core.constants import DATETIME_VIEW_FORMAT, IMPORTED_TAG, T_ME, TIME_1H
-from src.core.enums import SubscriptionStatus
+from src.core.enums import SubscriptionStatus, UserNotificationType
 from src.core.types import RemnaUserDto
 from src.core.utils.converters import country_code_to_flag
 from src.core.utils.i18n_helpers import (
@@ -282,6 +282,7 @@ class RemnaWebhookService:
                     day=day,
                     user=user,
                     is_trial=current_subscription.is_trial,
+                    notification_type=_expiring_notification_type(day),
                 )
             )
         else:
@@ -515,6 +516,22 @@ _LEGACY_EXPIRATION_HOURS: dict[str, int] = {
     RemnaUserEvent.EXPIRES_IN_24_HOURS: -24,
     RemnaUserEvent.EXPIRED_24_HOURS_AGO: 24,
 }
+
+
+def _expiring_notification_type(day: int) -> UserNotificationType:
+    """The settings toggle that governs an "expires in N days" notification.
+
+    The operator can switch each of the three off separately, so the event has
+    to name the one it actually is; left at its default it always claimed to be
+    the one-day notice, and the 3- and 2-day toggles did nothing. From 2.8.0 the
+    panel can be told to warn up to seven days ahead, and anything further out
+    than three days falls under the three-day toggle.
+    """
+    if day >= 3:
+        return UserNotificationType.EXPIRES_IN_3_DAYS
+    if day == 2:
+        return UserNotificationType.EXPIRES_IN_2_DAYS
+    return UserNotificationType.EXPIRES_IN_1_DAY
 
 
 def _is_expiration_event(event: str) -> bool:

@@ -12,6 +12,7 @@ from typing import Any, List, Optional
 
 import pytest
 
+from src.application.dto.settings import NotificationsSettingsDto
 from src.application.events import SubscriptionExpiresEvent
 from src.application.events.user import SubscriptionExpiredAgoEvent
 from src.application.services.remnawave import (
@@ -21,6 +22,7 @@ from src.application.services.remnawave import (
     _expiration_hours,
     _is_expiration_event,
 )
+from src.core.enums import UserNotificationType
 
 
 class RecordingBus:
@@ -202,3 +204,60 @@ class TestSuppression:
         )
 
         assert len(bus.published) == 1
+
+
+class TestNotificationToggles:
+    """Each "expires in N days" notice obeys its own settings toggle."""
+
+    @pytest.mark.parametrize(
+        "hours, expected",
+        [
+            (-72, UserNotificationType.EXPIRES_IN_3_DAYS),
+            (-48, UserNotificationType.EXPIRES_IN_2_DAYS),
+            (-24, UserNotificationType.EXPIRES_IN_1_DAY),
+            (-6, UserNotificationType.EXPIRES_IN_1_DAY),
+        ],
+    )
+    async def test_the_notice_names_the_toggle_for_its_day(
+        self, bus: RecordingBus, hours: int, expected: UserNotificationType
+    ) -> None:
+        # It used to always claim the one-day toggle: switching off the 3- or
+        # 2-day notice did nothing, and switching off the 1-day one silenced all.
+        published = await run(bus, hours)
+
+        assert published[0].notification_type is expected
+
+    @pytest.mark.parametrize("hours", [-96, -120, -168])
+    async def test_a_warning_further_out_than_three_days_uses_the_3_day_toggle(
+        self, bus: RecordingBus, hours: int
+    ) -> None:
+        # From 2.8.0 the panel can be set to warn up to a week ahead.
+        published = await run(bus, hours)
+
+        assert published[0].notification_type is UserNotificationType.EXPIRES_IN_3_DAYS
+
+    async def test_an_expired_notice_keeps_its_own_toggle(self, bus: RecordingBus) -> None:
+        published = await run(bus, 24)
+
+        assert published[0].notification_type is UserNotificationType.EXPIRED_1_DAY_AGO
+
+    @pytest.mark.parametrize(
+        "toggle_off, hours, delivered",
+        [
+            (UserNotificationType.EXPIRES_IN_3_DAYS, -72, False),
+            (UserNotificationType.EXPIRES_IN_3_DAYS, -24, True),
+            (UserNotificationType.EXPIRES_IN_1_DAY, -72, True),
+            (UserNotificationType.EXPIRES_IN_1_DAY, -24, False),
+        ],
+    )
+    async def test_switching_one_notice_off_leaves_the_others(
+        self,
+        bus: RecordingBus,
+        toggle_off: UserNotificationType,
+        hours: int,
+        delivered: bool,
+    ) -> None:
+        settings = NotificationsSettingsDto(settings={toggle_off: False})
+        published = await run(bus, hours)
+
+        assert settings.is_enabled(published[0].notification_type) is delivered
