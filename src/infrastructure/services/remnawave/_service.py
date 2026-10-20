@@ -217,12 +217,62 @@ class RemnawaveImpl(Remnawave):
         try:
             remna_user = await self.sdk.users.create_user(request_dto)
         except ConflictError:
-            logger.warning(f"RemnaUser '{request_dto.username}' already exists in panel")
-            raise
+            logger.warning(
+                f"RemnaUser '{request_dto.username}' already exists in panel, adopting it"
+            )
+            return await self._adopt_existing_user(request_dto)
 
         logger.info(
             f"RemnaUser '{remna_user.username}' created successfully. "
             f"id: '{remna_user.id}', telegram_id: '{remna_user.telegram_id}'"
+        )
+        return remna_user
+
+    async def _adopt_existing_user(self, request: CreateUserRequestDto) -> UserResponseDto:
+        """Take over a panel user that already carries this account's username.
+
+        The username is derived from the account (``rs_<telegram id>``), so a
+        panel user holding it belongs to this account. It exists when an earlier
+        creation got as far as the panel and then failed before RemnaShop saved
+        anything -- which every purchase and trial does when an older RemnaShop
+        talks to a 3.x panel: the panel creates the user, and the reply, lacking
+        the uuid the old SDK insists on, fails to parse. Without this the
+        account could never get a subscription again.
+
+        The user is brought to the state the creation asked for, except that an
+        expiry already further out than the requested one is kept: the orphan
+        may carry time that was paid for.
+        """
+        existing = await self.sdk.users.get_user_by_username(request.username)
+
+        expire_at = request.expire_at
+        if existing.expire_at and existing.expire_at > expire_at:
+            logger.warning(
+                f"RemnaUser '{request.username}' already runs until "
+                f"'{existing.expire_at}', keeping that over '{expire_at}'"
+            )
+            expire_at = existing.expire_at
+
+        update = UpdateUserRequestDto(
+            status=SubscriptionStatus.ACTIVE,
+            expire_at=expire_at,
+            telegram_id=request.telegram_id,
+            email=request.email,
+            description=request.description,
+            tag=request.tag,
+            traffic_limit_strategy=request.traffic_limit_strategy,
+            traffic_limit_bytes=request.traffic_limit_bytes,
+            hwid_device_limit=request.hwid_device_limit,
+            active_internal_squads=request.active_internal_squads,
+            external_squad_uuid=request.external_squad_uuid,
+        )
+
+        await self._ensure_detected()
+        remna_user = await self._panel.update_user(existing.id, update)
+
+        logger.info(
+            f"Adopted existing RemnaUser '{remna_user.username}' "
+            f"(id: '{remna_user.id}') instead of creating a duplicate"
         )
         return remna_user
 
