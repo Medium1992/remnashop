@@ -328,12 +328,21 @@ class AddSubscriptionDuration(Interactor[AddSubscriptionDurationDto, None]):
             if not target_user or not subscription:
                 raise ValueError(f"Subscription data for user_id '{data.user_id}' not found")
 
-            new_expire = subscription.expire_at + timedelta(days=data.days)
+            now = datetime_now()
+            # Days given to a lapsed subscription count from now, as a renewal
+            # does: counted from the old date, a week-old lapse plus two days
+            # is still in the past and was refused, and a half-day-old one got
+            # a day and a half. Taking days away still counts from the date.
+            base = max(subscription.expire_at, now) if data.days > 0 else subscription.expire_at
+            new_expire = base + timedelta(days=data.days)
 
-            if new_expire < datetime_now():
+            if new_expire < now:
                 raise ValueError(f"{actor.log} Invalid expire time for '{target_user.remna_name}'")
 
             subscription.expire_at = new_expire
+            if subscription.status == SubscriptionStatus.EXPIRED:
+                # The panel switches it back on along with the new date.
+                subscription.status = SubscriptionStatus.ACTIVE
             await self.subscription_dao.update(subscription)
             await self.remnawave.update_user(
                 user=target_user,
