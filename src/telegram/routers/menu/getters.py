@@ -17,6 +17,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.time import get_traffic_reset_delta
+from src.telegram.routers.s.devices import devices_extra as s_devices_extra
 
 
 @inject
@@ -191,6 +192,10 @@ async def devices_getter(
         "device_single_enabled": int(settings.extra.device_single_reset.enabled),
         "device_all_enabled": int(settings.extra.device_all_reset.enabled),
         "link_reset_enabled": int(settings.extra.link_reset.enabled),
+        # s edition: slots, app versions, stale subscriptions.
+        **await s_devices_extra(
+            dialog_manager, i18n, settings, current_subscription, devices, formatted_devices
+        ),
     }
 
 

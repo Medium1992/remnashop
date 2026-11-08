@@ -69,9 +69,7 @@ class DeviceJobs:
             targets = collect_outdated(
                 scan, cache, merge_sources(s.versions.sources), s.versions, s.router_hwids
             )
-            report.versions = await self.reminders.send_outdated(
-                targets, s.versions.interval_days
-            )
+            report.versions = await self.reminders.send_outdated(targets, s.versions.interval_days)
 
         if s.stale.enabled:
             targets_stale = collect_stale(scan, s.stale.stale_hours, s.router_hwids)

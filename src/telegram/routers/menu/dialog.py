@@ -10,6 +10,7 @@ from src.core.constants import INLINE_QUERY_INVITE, PAYMENT_PREFIX
 from src.core.enums import BannerName
 from src.telegram.keyboards import build_buttons_row, connect_buttons
 from src.telegram.routers.dashboard.handlers import on_smart_search
+from src.telegram.routers.s.devices import on_add_slot as s_on_add_slot
 from src.telegram.states import Dashboard, MainMenu, Subscription
 from src.telegram.utils import require_permission
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -142,6 +143,7 @@ menu = Window(
 devices = Window(
     Banner(BannerName.DEVICES),
     I18nFormat("msg-menu-devices"),
+    Format("\n{s_devices}", when=F["s_devices"]),
     Row(
         Button(
             text=I18nFormat("btn-common.devices-empty"),
@@ -167,6 +169,14 @@ devices = Window(
         item_id_getter=lambda item: item["index"],
         items="devices",
         when=F["has_devices"],
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-s-devices.add-slot"),
+            id="s_add_slot",
+            on_click=s_on_add_slot,
+            when=F["s_slot_button"],
+        ),
     ),
     Row(
         Start(

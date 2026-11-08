@@ -25,3 +25,10 @@ class DeviceNoticeKey(StorageKey, prefix="s_device_notice"):
 
     kind: str
     device: str
+
+
+@dataclass(frozen=True)
+class SlotGrantKey(StorageKey, prefix="s_slot"):
+    """An open temporary device slot, by the subscription's stored remna id."""
+
+    remna_id: str

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from loguru import logger
 
 from src.application.common import Cryptographer, Interactor, Remnawave
-from src.application.common.dao import SubscriptionDao, UserDao
+from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, RemnaSubscriptionDto, SubscriptionDto, UserDto
@@ -33,6 +33,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         config: AppConfig,
         remnawave: Remnawave,
         cryptographer: Cryptographer,
+        settings_dao: SettingsDao,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
@@ -40,6 +41,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         self.config = config
         self.remnawave = remnawave
         self.cryptographer = cryptographer
+        self.settings_dao = settings_dao
 
     async def _execute(self, actor: UserDto, data: SyncRemnaUserDto) -> bool:
         remna_user = data.remna_user
@@ -146,7 +148,12 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
         target: SubscriptionDto,
         source: RemnaSubscriptionDto,
     ) -> bool:
+        ceiling = target.device_limit
         subscription = self.remnawave.apply_sync(target, source)
+        if (await self.settings_dao.get()).extra.s.slots.enabled:
+            # s edition: with strict slots the panel holds the physical limit
+            # (what is occupied), not the plan's; the plan's stays here.
+            subscription.device_limit = ceiling
         await self.subscription_dao.update(subscription)
         return bool(subscription.changed_data)
 
