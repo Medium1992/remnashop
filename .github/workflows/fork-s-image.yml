@@ -49,10 +49,13 @@ jobs:
           docker run --rm --env-file tests/.env.test -v "$PWD/src:/opt/remnashop/src:ro"
           remnashop-test:ci mypy
 
+      # assets/ too: the s tests render the real translations, so a broken
+      # .ftl fails here rather than on a user's button.
       - name: 🧪 Pytest
         run: >
           docker run --rm --env-file tests/.env.test
           -v "$PWD/src:/opt/remnashop/src:ro" -v "$PWD/tests:/opt/remnashop/tests:ro"
+          -v "$PWD/assets:/opt/remnashop/assets:ro"
           remnashop-test:ci pytest -q tests/
 
   image:
