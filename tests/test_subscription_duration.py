@@ -1,6 +1,7 @@
 """Adding or taking days in the user card ("expiry time").
 
-Days used to be added to the old expiry date even when it had passed: a
+Taking more days than remain ends the subscription now rather than being
+refused. Days used to be added to the old expiry date even when it had passed: a
 subscription lapsed a week ago plus two days was still in the past and was
 refused, and one lapsed half a day ago got a day and a half instead of two.
 """
@@ -97,6 +98,10 @@ class TestActive:
         subscription, _, now = await add(-2, expires_in_days=10)
         assert subscription.expire_at <= now + timedelta(days=8)
 
-    async def test_taking_more_than_remains_is_refused(self) -> None:
-        with pytest.raises(ValueError):
-            await add(-5, expires_in_days=2)
+    async def test_taking_more_than_remains_ends_it_now(self) -> None:
+        # 12 hours left, minus a day: the subscription ends, it is not refused.
+        subscription, panel, now = await add(-1, expires_in_days=0.5)
+
+        # The panel takes no past date; just ahead, and its expiry job does the rest.
+        assert now < subscription.expire_at <= now + timedelta(minutes=1, seconds=5)
+        assert panel.sent
