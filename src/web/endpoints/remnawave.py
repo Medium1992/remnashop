@@ -5,6 +5,7 @@ from dishka import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from loguru import logger
+from redis.asyncio import Redis
 from remnapy.controllers import WebhookUtility
 from remnapy.models.webhook import (
     TorrentBlockerReportDto,
@@ -19,6 +20,7 @@ from src.application.services import RemnaWebhookService
 from src.core.config import AppConfig
 from src.core.constants import API_V1, REMNAWAVE_WEBHOOK_PATH
 from src.infrastructure.services.remnawave._compat import normalise_webhook_payload
+from src.infrastructure.services.webhook_dedupe import WebhookDeliveryGuard
 
 router = APIRouter(prefix=API_V1, include_in_schema=False)
 
@@ -28,6 +30,7 @@ async def _process_remnawave_webhook(
     config: AppConfig,
     remna_webhook_service: RemnaWebhookService,
     event_publisher: EventPublisher,
+    delivery_guard: WebhookDeliveryGuard,
 ) -> Response:
     try:
         raw_body = await request.body()
@@ -57,6 +60,10 @@ async def _process_remnawave_webhook(
     if not payload:
         logger.warning("Payload is empty after validation")
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    signature = request.headers.get("x-remnawave-signature", "")
+    if not await delivery_guard.claim(signature):
+        return Response(status_code=status.HTTP_200_OK)
 
     try:
         if WebhookUtility.is_user_event(payload.event):
@@ -90,6 +97,8 @@ async def _process_remnawave_webhook(
 
     except Exception as e:
         logger.exception(f"Failed to process Remnawave webhook due to '{e}'")
+        # The panel retries a failed delivery; that retry has to be processed.
+        await delivery_guard.release(signature)
         error_event = ErrorEvent(**config.build.data, exception=e)
         await event_publisher.publish(error_event)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -104,10 +113,12 @@ async def remnawave_webhook(
     config: FromDishka[AppConfig],
     remna_webhook_service: FromDishka[RemnaWebhookService],
     event_publisher: FromDishka[EventPublisher],
+    redis: FromDishka[Redis],
 ) -> Response:
     return await _process_remnawave_webhook(
         request=request,
         config=config,
         remna_webhook_service=remna_webhook_service,
         event_publisher=event_publisher,
+        delivery_guard=WebhookDeliveryGuard(redis),
     )
