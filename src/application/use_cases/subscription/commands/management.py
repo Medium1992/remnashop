@@ -299,6 +299,10 @@ class ToggleExternalSquad(Interactor[ToggleExternalSquadDto, None]):
         )
 
 
+# How far ahead "end now" is set: the panel only accepts a future expiry.
+END_NOW_MARGIN = timedelta(minutes=1)
+
+
 @dataclass(frozen=True)
 class AddSubscriptionDurationDto:
     user_id: int
@@ -337,7 +341,16 @@ class AddSubscriptionDuration(Interactor[AddSubscriptionDurationDto, None]):
             new_expire = base + timedelta(days=data.days)
 
             if new_expire < now:
-                raise ValueError(f"{actor.log} Invalid expire time for '{target_user.remna_name}'")
+                if subscription.expire_at <= now:
+                    # Already over: there is nothing left to take.
+                    raise ValueError(
+                        f"{actor.log} Invalid expire time for '{target_user.remna_name}'"
+                    )
+                # Taking more than remains ends the subscription. The panel
+                # refuses a past date, so it gets one just ahead; its own
+                # expiry job (every 30 s) then expires the user and the usual
+                # "expired" webhook follows.
+                new_expire = now + END_NOW_MARGIN
 
             subscription.expire_at = new_expire
             if subscription.status == SubscriptionStatus.EXPIRED:
