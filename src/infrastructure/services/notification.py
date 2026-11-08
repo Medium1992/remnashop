@@ -73,6 +73,9 @@ from src.telegram.keyboards import (
     get_renew_keyboard,
     get_user_keyboard,
 )
+from src.telegram.routers.s.block.handlers import (
+    torrent_report_keyboard as s_torrent_report_keyboard,
+)
 from src.telegram.widgets import extract_tg_emoji
 
 
@@ -134,7 +137,8 @@ class NotificationService(Notifier):
         if isinstance(event, TorrentBlockedEvent):
             return get_contact_support_keyboard(event.support_url)
         if isinstance(event, TorrentBlockerReportEvent):
-            return get_user_keyboard(event.user_id)
+            # s edition: block right from the report.
+            return s_torrent_report_keyboard(event.user_id)
         if isinstance(event, RemnashopWelcomeEvent):
             return get_remnashop_keyboard()
         if isinstance(event, BotUpdateEvent):

@@ -21,6 +21,7 @@ from src.telegram.routers.s.dashboard.handlers import NUMBERS, TOGGLES
 ROOT = Path(__file__).resolve().parent.parent
 S_SOURCES = [
     *ROOT.glob("src/telegram/routers/s/**/*.py"),
+    *ROOT.glob("src/telegram/routers/dashboard/users/user/dialog.py"),
     *ROOT.glob("src/infrastructure/services/s/*.py"),
 ]
 KEY_RE = re.compile(r"\"((?:btn|msg|ntf)-s[-\w]*\.[-\w]+)\"")
@@ -31,13 +32,13 @@ NUMERIC = """
     unavailable target telegram_id slots_enabled slots_base slots_ttl versions_enabled
     versions_notify versions_ignore_patch versions_interval versions_refresh versions_checked
     stale_enabled stale_hours stale_interval routers_count ch_enabled ch_checked field_low
-    field_high inactive_days inactive_warn inactive_enabled
+    field_high inactive_days inactive_warn inactive_enabled blocked blocked_count
     inactive_include_disabled
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title
     ch_type ch_where ch_url ch_value ch_published ch_status ch_source routers date since
-    online status
+    online status reason until
 """
 ARGS: dict[str, Any] = {**dict.fromkeys(NUMERIC.split(), 1), **dict.fromkeys(TEXTUAL.split(), "x")}
 

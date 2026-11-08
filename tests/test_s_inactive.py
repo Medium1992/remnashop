@@ -10,6 +10,7 @@ from src.application.common import TranslatorRunner
 from src.application.dto import SettingsDto, UserDto
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
+from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.inactive import Inactive, InactiveProfiles, inactive_since
 from src.telegram.routers.s.subscription import subscription_extra
 
@@ -49,6 +50,17 @@ class RecordingNotifier:
         self.keys.append(payload.i18n_key)
 
 
+class FakeBlocks:
+    def __init__(self, blocked: Optional[set] = None) -> None:
+        self.blocked = blocked or set()
+
+    async def user_ids(self) -> set:
+        return self.blocked
+
+    async def get(self, user_id: int) -> None:
+        return None
+
+
 class RecordingDelete:
     def __init__(self) -> None:
         self.deleted: List[int] = []
@@ -83,6 +95,7 @@ def build(items: List[Inactive], **settings: int) -> tuple[InactiveProfiles, Any
         remnawave=None,  # type: ignore[arg-type]
         notifier=notifier,  # type: ignore[arg-type]
         delete_subscription=delete,  # type: ignore[arg-type]
+        block_dao=FakeBlocks(),  # type: ignore[arg-type]
     )
 
     async def candidates(include_disabled: bool) -> List[Inactive]:
@@ -146,6 +159,11 @@ class TestDecisions:
         service, _, _, delete = build([lapsed(400)], warn_days=0)
         assert (await service.run(excluded_user_ids={7})).deleted == 0
 
+    async def test_a_blocked_user_is_left_alone(self) -> None:
+        service, _, _, delete = build([lapsed(400)], warn_days=0)
+        service.block_dao = FakeBlocks({7})  # type: ignore[assignment]
+        assert (await service.run()).deleted == 0
+
     async def test_a_new_lapse_needs_a_new_warning(self) -> None:
         # Warned once, renewed, lapsed again: the old warning does not count.
         old = lapsed(80)
@@ -179,6 +197,8 @@ class FakeContainer:
         self.settings, self.i18n = settings, i18n
 
     async def get(self, kind: Any) -> Any:
+        if kind is BlockService:
+            return FakeBlocks()
         return self.i18n if kind is TranslatorRunner else self.settings
 
 

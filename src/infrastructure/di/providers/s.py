@@ -2,6 +2,8 @@ from dishka import AnyOf, Provider, Scope, provide, provide_all
 
 from src.application.common import Remnawave
 from src.application.use_cases.s import S_USE_CASES
+from src.infrastructure.database.dao.s_blocks import UserBlockDao
+from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.inactive import InactiveProfiles
@@ -30,5 +32,7 @@ class SProvider(Provider):
     device_jobs = provide(source=DeviceJobs)
     slots = provide(source=SlotService)
     inactive = provide(source=InactiveProfiles)
+    block_dao = provide(source=UserBlockDao)
+    blocks = provide(source=BlockService)
 
     use_cases = provide_all(*S_USE_CASES)

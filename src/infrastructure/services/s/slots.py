@@ -26,6 +26,7 @@ from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.dto import MessagePayloadDto, SubscriptionDto, UserDto
 from src.application.dto.s_settings import SlotsSettingsDto
 from src.application.events.system import UserDeviceAddedEvent, UserDeviceDeletedEvent
+from src.core.enums import SubscriptionStatus
 from src.infrastructure.redis.key_builder import serialize_storage_key
 from src.infrastructure.redis.s_keys import SlotGrantKey
 from src.infrastructure.services.event_bus import on_event
@@ -49,6 +50,7 @@ class SlotOutcome(StrEnum):
     UNLIMITED = auto()
     UNAVAILABLE = auto()
     DISABLED = auto()
+    BLOCKED = auto()  # the subscription is switched off: a slot would not help
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,8 @@ class SlotService:
         ceiling = subscription.device_limit
         if ceiling <= 0:
             return SlotResult(SlotOutcome.UNLIMITED)
+        if subscription.status == SubscriptionStatus.DISABLED and not by_admin:
+            return SlotResult(SlotOutcome.BLOCKED)
 
         grant = await self.get_grant(subscription.user_remna_id)
         if grant and grant.is_open:

@@ -18,7 +18,7 @@ from src.telegram.widgets.kbd import (
 )
 from src.telegram.window import Window
 
-from .getters import inactive_list_getter, s_getter
+from .getters import blocked_getter, inactive_list_getter, s_getter
 from .handlers import (
     on_back_from_number,
     on_back_to_kind,
@@ -100,6 +100,7 @@ main = Window(
             state=SDashboard.INACTIVE,
         )
     ),
+    Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(
         SwitchTo(
             I18nFormat("btn-s.routers", value=F["routers_count"]),
@@ -230,6 +231,28 @@ inactive_list = Window(
     getter=inactive_list_getter,
 )
 
+blocked = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.blocked"),
+    ScrollingGroup(
+        Select(
+            I18nFormat("btn-s.blocked-item", name=F["item"]["name"], until=F["item"]["until"]),
+            id="blocked_select",
+            item_id_getter=lambda item: item["user_id"],
+            items="blocked",
+            on_click=on_inactive_select,
+        ),
+        id="blocked_scroll",
+        width=1,
+        height=8,
+        hide_on_single_page=True,
+    ),
+    _back(),
+    IgnoreUpdate(),
+    state=SDashboard.BLOCKED,
+    getter=blocked_getter,
+)
+
 routers = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-dashboard.routers"),
@@ -278,6 +301,7 @@ router = Dialog(
     stale,
     inactive,
     inactive_list,
+    blocked,
     routers,
     number,
     target,

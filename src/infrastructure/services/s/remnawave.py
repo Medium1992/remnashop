@@ -6,12 +6,14 @@ from dishka import AsyncContainer
 from loguru import logger
 from redis.asyncio import Redis
 from remnapy import RemnawaveSDK
+from remnapy.enums import UserStatus
 from remnapy.models import CreateUserRequestDto, UpdateUserRequestDto, UserResponseDto
 
 from src.application.common.dao import SettingsDao
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, UserDto
 from src.application.dto.s_settings import SlotsSettingsDto
 from src.core.types import RemnawaveHttpClient
+from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.services.remnawave import RemnawaveImpl
 
 from .slot_grants import physical_limit, read_grant
@@ -21,6 +23,8 @@ from .slot_grants import physical_limit, read_grant
 # _OMIT leaves the panel's limit untouched.
 _OMIT = -1
 _device_limit: ContextVar[Optional[int]] = ContextVar("s_device_limit", default=None)
+# True while writing a user who is under a temporary block: they stay DISABLED.
+_blocked: ContextVar[bool] = ContextVar("s_blocked", default=False)
 
 
 class SRemnawave(RemnawaveImpl):
@@ -28,7 +32,9 @@ class SRemnawave(RemnawaveImpl):
 
     With strict slots on, creating or updating a user writes the *physical*
     device limit -- what is occupied, plus an open temporary slot -- instead
-    of the plan's, which stays in RemnaShop as the ceiling.
+    of the plan's, which stays in RemnaShop as the ceiling. A user under a
+    temporary block is written DISABLED whatever the caller asked for, so a
+    plan change during the block does not lift it.
     """
 
     def __init__(
@@ -47,6 +53,13 @@ class SRemnawave(RemnawaveImpl):
             settings_dao: SettingsDao = await request.get(SettingsDao)
             settings = await settings_dao.get()
             return settings.extra.s.slots
+
+    async def _is_blocked(self, user_id: int) -> bool:
+        if not user_id:
+            return False
+        async with self._container() as request:
+            block_dao: UserBlockDao = await request.get(UserBlockDao)
+            return await block_dao.get(user_id) is not None
 
     async def set_device_limit(self, uuid: UUID, limit: int) -> None:
         panel_id = await self._panel_id_or_raise(uuid)
@@ -80,10 +93,12 @@ class SRemnawave(RemnawaveImpl):
         source = subscription or plan
         limit = await self._strict_limit(None, source.device_limit) if source else None
         token = _device_limit.set(limit)
+        blocked = _blocked.set(await self._is_blocked(user.id))
         try:
             return await super().create_user(user, plan, subscription)
         finally:
             _device_limit.reset(token)
+            _blocked.reset(blocked)
 
     async def update_user(
         self,
@@ -96,10 +111,12 @@ class SRemnawave(RemnawaveImpl):
         source = subscription or plan
         limit = await self._strict_limit(uuid, source.device_limit) if source else None
         token = _device_limit.set(limit)
+        blocked = _blocked.set(await self._is_blocked(user.id))
         try:
             return await super().update_user(user, uuid, plan, subscription, reset_traffic)
         finally:
             _device_limit.reset(token)
+            _blocked.reset(blocked)
 
     def _build_create_request(
         self,
@@ -111,6 +128,8 @@ class SRemnawave(RemnawaveImpl):
         limit = _device_limit.get()
         if limit is not None and limit != _OMIT:
             request.hwid_device_limit = limit
+        if _blocked.get():
+            request.status = UserStatus.DISABLED
         return request
 
     def _build_update_request(
@@ -125,4 +144,6 @@ class SRemnawave(RemnawaveImpl):
             request.hwid_device_limit = None
         elif limit is not None:
             request.hwid_device_limit = limit
+        if _blocked.get():
+            request.status = UserStatus.DISABLED
         return request

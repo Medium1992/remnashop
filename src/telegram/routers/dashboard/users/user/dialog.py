@@ -8,6 +8,7 @@ from magic_filter import F
 from src.core.enums import BannerName, SubscriptionStatus
 from src.telegram.keyboards import back_main_menu_button
 from src.telegram.routers.dashboard.broadcast.handlers import on_content_input, on_preview
+from src.telegram.routers.s.block.dialog import start_block_dialog as s_start_block_dialog
 from src.telegram.states import DashboardRemnashop, DashboardUser
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import (
@@ -173,6 +174,12 @@ user = Window(
             text=I18nFormat("btn-user.block"),
             id="block",
             on_click=on_block_toggle,
+            when=F["is_not_self"] & F["can_edit"],
+        ),
+        Button(
+            text=I18nFormat("btn-s-block.open"),
+            id="s_temp_block",
+            on_click=s_start_block_dialog,
             when=F["is_not_self"] & F["can_edit"],
         ),
     ),

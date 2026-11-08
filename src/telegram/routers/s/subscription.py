@@ -12,7 +12,10 @@ from src.application.common.dao import SettingsDao
 from src.application.dto import SubscriptionDto
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
+from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.inactive import DATE_FORMAT, inactive_since
+
+from .devices import block_banner
 
 
 async def subscription_extra(
@@ -22,6 +25,11 @@ async def subscription_extra(
     if subscription is None:
         return extra
     container: AsyncContainer = dialog_manager.middleware_data[CONTAINER_NAME]
+    block = await (await container.get(BlockService)).get(subscription.user_id)
+    if block:
+        i18n_block: TranslatorRunner = await container.get(TranslatorRunner)
+        extra["s_inactive"] = block_banner(i18n_block, block)
+        return extra
     settings = (await (await container.get(SettingsDao)).get()).extra.s.inactive
     if not settings.enabled:
         return extra

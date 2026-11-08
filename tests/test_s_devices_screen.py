@@ -11,10 +11,12 @@ from test_service_end_to_end import a_subscription
 
 from src.application.common import TranslatorHub
 from src.application.dto import SettingsDto
+from src.application.dto.s_blocks import UserBlockDto
 from src.core.config import AppConfig
 from src.core.utils.client_versions import ChannelState, VersionsCache
 from src.infrastructure.di.providers.i18n import I18nProvider
 from src.infrastructure.di.providers.retort import RetortProvider
+from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.telegram.routers.s.devices import devices_extra
 
@@ -39,13 +41,29 @@ class FakeVersions:
         return cache
 
 
+class FakeBlocks:
+    def __init__(self, block: Optional[UserBlockDto] = None) -> None:
+        self.block = block
+
+    async def get(self, user_id: int) -> Optional[UserBlockDto]:
+        return self.block
+
+
 class FakeContainer:
+    def __init__(self, block: Optional[UserBlockDto] = None) -> None:
+        self.blocks = FakeBlocks(block)
+
     async def get(self, kind: Any) -> Any:
-        return {Redis: FakeRedis(), ClientVersionsService: FakeVersions()}[kind]
+        return {
+            Redis: FakeRedis(),
+            ClientVersionsService: FakeVersions(),
+            BlockService: self.blocks,
+        }[kind]
 
 
 class FakeManager:
-    middleware_data: Dict[str, Any] = {CONTAINER_NAME: FakeContainer()}
+    def __init__(self, block: Optional[UserBlockDto] = None) -> None:
+        self.middleware_data: Dict[str, Any] = {CONTAINER_NAME: FakeContainer(block)}
 
 
 def settings(**on: bool) -> SettingsDto:
@@ -118,3 +136,16 @@ class TestDevicesScreen:
         assert [f["label"][:1] for f in formatted] == ["⚠", "✅", "⏳"]
         assert "4.1.0 → <b>4.3.0</b>" in extra["s_devices"]
         assert "не обновлялась 10 дней" in extra["s_devices"]
+
+    async def test_a_block_is_shown_and_hides_the_slot_button(self, i18n: Any) -> None:
+        extra = await devices_extra(
+            FakeManager(UserBlockDto(user_id=7, reason="торренты")),  # type: ignore[arg-type]
+            i18n,
+            settings(slots=True),
+            a_subscription(device_limit=3),
+            [],
+            [],
+        )
+        assert "Доступ приостановлен" in extra["s_devices"]
+        assert "торренты" in extra["s_devices"]
+        assert extra["s_slot_button"] == 0

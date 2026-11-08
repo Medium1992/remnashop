@@ -19,6 +19,7 @@ from remnapy.models.hwid import HwidDeviceDto
 from src.application.common import Notifier, TranslatorRunner
 from src.application.common.dao import SubscriptionDao
 from src.application.dto import MessagePayloadDto, SettingsDto, SubscriptionDto, TelegramUserDto
+from src.application.dto.s_blocks import UserBlockDto
 from src.core.constants import USER_KEY
 from src.core.utils.client_versions import (
     Sources,
@@ -28,6 +29,7 @@ from src.core.utils.client_versions import (
     merge_sources,
     parse_client,
 )
+from src.infrastructure.services.s.blocks import UNTIL_FORMAT, BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import is_router
 from src.infrastructure.services.s.reminders import device_title, subscription_age
@@ -54,7 +56,12 @@ async def devices_extra(
     lines: list[str] = []
     icons: dict[int, str] = {}
 
-    if s.slots.enabled and subscription.device_limit > 0:
+    blocks: BlockService = await container.get(BlockService)
+    block = await blocks.get(subscription.user_id)
+    if block:
+        lines.append(block_banner(i18n, block))
+
+    if s.slots.enabled and subscription.device_limit > 0 and not block:
         occupied, shown = shown_counters(subscription.device_limit, len(devices))
         extra["max_count"] = shown
         extra["s_slot_button"] = int(occupied < subscription.device_limit)
@@ -78,6 +85,14 @@ async def devices_extra(
 
     extra["s_devices"] = "\n".join(lines)
     return extra
+
+
+def block_banner(i18n: TranslatorRunner, block: UserBlockDto) -> str:
+    return i18n.get(
+        "msg-s-block.banner",
+        until=block.until.strftime(UNTIL_FORMAT) if block.until else "none",
+        reason=block.reason or "none",
+    )
 
 
 def _version_lines(
@@ -135,6 +150,7 @@ _OUTCOME_KEYS = {
     SlotOutcome.FREE_PLACE: "ntf-s-slots.free-place",
     SlotOutcome.AT_CEILING: "ntf-s-slots.at-ceiling",
     SlotOutcome.UNAVAILABLE: "ntf-s-slots.unavailable",
+    SlotOutcome.BLOCKED: "ntf-s-slots.blocked",
 }
 
 

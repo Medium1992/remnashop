@@ -68,6 +68,13 @@ if ! alembic -c src/infrastructure/database/alembic.ini upgrade head; then
     exit 1
 fi
 
+# s edition: its own tables, on a chain of their own (version table
+# alembic_version_s), after upstream's so its foreign keys have targets.
+if ! alembic -c src/infrastructure/database/alembic_s.ini upgrade head; then
+    echo "Database migration (s) failed! Exiting container..."
+    exit 1
+fi
+
 echo "Migrations deployed successfully"
 
 

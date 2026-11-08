@@ -11,7 +11,12 @@ class SDashboard(StatesGroup):
     STALE = State()
     INACTIVE = State()
     INACTIVE_LIST = State()
+    BLOCKED = State()
     ROUTERS = State()
     NUMBER = State()
     TARGET = State()
     CONFIRM_SEND = State()
+
+
+class SBlock(StatesGroup):
+    MAIN = State()

@@ -1,6 +1,8 @@
 from aiogram import Router
 
 from . import dashboard, extra, menu, subscription
+from .s.block import dialog as s_block_dialog
+from .s.block import handlers as s_block_handlers
 from .s.dashboard import dialog as s_dashboard_dialog
 
 
@@ -15,6 +17,7 @@ def setup_routers(router: Router) -> None:
         extra.channel_member.router,
         extra.goto.router,
         extra.inline.router,
+        s_block_handlers.router,
         #
         menu.handlers.router,
         menu.dialog.router,
@@ -38,6 +41,7 @@ def setup_routers(router: Router) -> None:
         dashboard.remnashop.advertising.dialog.router,
         dashboard.remnashop.extra.dialog.router,
         s_dashboard_dialog.router,
+        s_block_dialog.router,
         #
         dashboard.users.dialog.router,
         dashboard.users.user.dialog.router,

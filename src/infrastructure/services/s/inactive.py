@@ -30,6 +30,7 @@ from src.application.events.user import SubscriptionExpiredEvent
 from src.application.use_cases.subscription.commands.management import DeleteSubscription
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
+from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.database.models import Subscription, User
 from src.infrastructure.redis.key_builder import serialize_storage_key
 from src.infrastructure.redis.s_keys import InactiveListKey, InactiveWarningKey
@@ -91,6 +92,7 @@ class InactiveProfiles:
         remnawave: SRemnawave,
         notifier: Notifier,
         delete_subscription: DeleteSubscription,
+        block_dao: UserBlockDao,
     ) -> None:
         self.session = session
         self.redis = redis
@@ -100,6 +102,7 @@ class InactiveProfiles:
         self.remnawave = remnawave
         self.notifier = notifier
         self.delete_subscription = delete_subscription
+        self.block_dao = block_dao
 
     async def candidates(self, include_disabled: bool) -> list[Inactive]:
         now = datetime_now()
@@ -162,7 +165,8 @@ class InactiveProfiles:
             return report
 
         now = datetime_now()
-        excluded = excluded_user_ids or set()
+        # A blocked profile waits for its block to end, whatever its dates.
+        excluded = (excluded_user_ids or set()) | await self.block_dao.user_ids()
         items = [
             i for i in await self.candidates(settings.include_disabled) if i.user.id not in excluded
         ]

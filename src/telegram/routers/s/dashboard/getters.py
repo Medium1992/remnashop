@@ -5,9 +5,10 @@ from aiogram_dialog import DialogManager
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 
-from src.application.common.dao import SettingsDao
+from src.application.common.dao import SettingsDao, UserDao
 from src.application.use_cases.s.settings import NUMBER_FIELDS
 from src.core.utils.client_versions import merge_sources
+from src.infrastructure.services.s.blocks import UNTIL_FORMAT, BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.inactive import InactiveProfiles
 
@@ -116,3 +117,23 @@ async def inactive_list_getter(
 ) -> dict[str, Any]:
     rows = await inactive.listing()
     return {"inactive": rows, "inactive_count": len(rows)}
+
+
+@inject
+async def blocked_getter(
+    dialog_manager: DialogManager,
+    blocks: FromDishka[BlockService],
+    user_dao: FromDishka[UserDao],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    rows = []
+    for block in await blocks.all():
+        user = await user_dao.get_by_id(block.user_id)
+        rows.append(
+            {
+                "user_id": block.user_id,
+                "name": user.name if user else str(block.user_id),
+                "until": block.until.strftime(UNTIL_FORMAT) if block.until else "none",
+            }
+        )
+    return {"blocked": rows, "blocked_count": len(rows)}

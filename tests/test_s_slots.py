@@ -18,6 +18,7 @@ from test_service_end_to_end import a_plan, a_subscription, a_user, metadata
 from src.application.dto import RemnaSubscriptionDto, SettingsDto
 from src.application.events.system import UserDeviceAddedEvent, UserDeviceDeletedEvent
 from src.application.use_cases.remnawave.commands.synchronization import SyncRemnaUser
+from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.services.s.remnawave import SRemnawave
 from src.infrastructure.services.s.slot_grants import SlotGrant, physical_limit, shown_counters
 from src.infrastructure.services.s.slots import SlotOutcome, SlotService
@@ -59,9 +60,18 @@ class FakeSettingsDao:
         return self.settings
 
 
+class FakeBlockDao:
+    def __init__(self, blocked: Optional[set] = None) -> None:
+        self.blocked = blocked or set()
+
+    async def get(self, user_id: int) -> Any:
+        return object() if user_id in self.blocked else None
+
+
 class FakeRequestScope:
-    def __init__(self, dao: FakeSettingsDao) -> None:
+    def __init__(self, dao: FakeSettingsDao, blocks: Optional[FakeBlockDao] = None) -> None:
         self.dao = dao
+        self.blocks = blocks or FakeBlockDao()
 
     async def __aenter__(self) -> "FakeRequestScope":
         return self
@@ -69,16 +79,17 @@ class FakeRequestScope:
     async def __aexit__(self, *exc: Any) -> None:
         return None
 
-    async def get(self, kind: Any) -> FakeSettingsDao:
-        return self.dao
+    async def get(self, kind: Any) -> Any:
+        return self.blocks if kind is UserBlockDao else self.dao
 
 
 class FakeContainer:
-    def __init__(self, dao: FakeSettingsDao) -> None:
+    def __init__(self, dao: FakeSettingsDao, blocks: Optional[FakeBlockDao] = None) -> None:
         self.dao = dao
+        self.blocks = blocks
 
     def __call__(self) -> FakeRequestScope:
-        return FakeRequestScope(self.dao)
+        return FakeRequestScope(self.dao, self.blocks)
 
 
 class FakeSubscriptionDao:
@@ -249,6 +260,37 @@ class TestPanelWrites:
 
         create = [c for c in panel.calls if c.method == "POST"][-1]
         assert create.body["hwidDeviceLimit"] == 1
+
+
+class TestBlockedStaysOff:
+    async def test_a_plan_change_during_a_block_keeps_the_user_disabled(
+        self, sdk: Any, http: httpx.AsyncClient, panel: PanelStub
+    ) -> None:
+        panel.on("GET", "/api/system/metadata", metadata("3.4.5"))
+        panel.on("PATCH", "/api/users", user_payload(line="v3"))
+        client = SRemnawave(
+            sdk,
+            http,
+            FakeContainer(FakeSettingsDao(enabled=False), FakeBlockDao({a_user().id})),  # type: ignore[arg-type]
+            FakeRedis(),  # type: ignore[arg-type]
+        )
+        await client.try_connection()
+
+        await client.update_user(a_user(), a_subscription().user_remna_id, plan=a_plan())
+
+        patch = [c for c in panel.calls if c.method == "PATCH"][-1]
+        assert patch.body["status"] == "DISABLED"
+
+    async def test_an_unblocked_user_gets_what_was_asked(
+        self, sdk: Any, http: httpx.AsyncClient, panel: PanelStub
+    ) -> None:
+        settings, redis = FakeSettingsDao(enabled=False), FakeRedis()
+        client = await a_client(sdk, http, panel, settings, redis)
+
+        await client.update_user(a_user(), a_subscription().user_remna_id, plan=a_plan())
+
+        patch = [c for c in panel.calls if c.method == "PATCH"][-1]
+        assert patch.body["status"] == "ACTIVE"
 
 
 class TestTemporarySlot:
