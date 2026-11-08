@@ -26,6 +26,7 @@ from src.infrastructure.taskiq.tasks.s_devices import (
     s_force_refresh_client_versions_task,
     s_refresh_client_channel_task,
 )
+from src.telegram.routers.dashboard.users.user.handlers import start_user_window
 from src.telegram.s_states import SDashboard
 
 from .getters import split_channel_id
@@ -37,6 +38,8 @@ TOGGLES = {
     "versions_notify": "versions.notify_enabled",
     "versions_ignore_patch": "versions.ignore_patch",
     "stale_enabled": "stale.enabled",
+    "inactive_enabled": "inactive.enabled",
+    "inactive_include_disabled": "inactive.include_disabled",
 }
 
 # Button id -> (number setting, window to come back to).
@@ -48,6 +51,8 @@ NUMBERS = {
     "versions_min_devices": ("versions.observed_min_devices", SDashboard.VERSIONS),
     "stale_hours": ("stale.stale_hours", SDashboard.STALE),
     "stale_interval": ("stale.interval_days", SDashboard.STALE),
+    "inactive_days": ("inactive.delete_after_days", SDashboard.INACTIVE),
+    "inactive_warn": ("inactive.warn_days", SDashboard.INACTIVE),
 }
 
 
@@ -297,3 +302,12 @@ async def on_routers_input(
 ) -> None:
     dialog_manager.show_mode = ShowMode.DELETE_AND_SEND
     await update_routers(_user(dialog_manager), message.text or "")
+
+
+# ── inactive ─────────────────────────────────────────────────────────────────
+
+
+async def on_inactive_select(
+    callback: CallbackQuery, widget: Any, dialog_manager: DialogManager, item_id: str
+) -> None:
+    await start_user_window(manager=dialog_manager, target_user_id=int(item_id))

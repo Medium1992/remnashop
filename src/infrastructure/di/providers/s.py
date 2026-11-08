@@ -4,6 +4,7 @@ from src.application.common import Remnawave
 from src.application.use_cases.s import S_USE_CASES
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
+from src.infrastructure.services.s.inactive import InactiveProfiles
 from src.infrastructure.services.s.jobs import DeviceJobs
 from src.infrastructure.services.s.reminders import DeviceReminders
 from src.infrastructure.services.s.remnawave import SRemnawave
@@ -28,5 +29,6 @@ class SProvider(Provider):
     device_reminders = provide(source=DeviceReminders)
     device_jobs = provide(source=DeviceJobs)
     slots = provide(source=SlotService)
+    inactive = provide(source=InactiveProfiles)
 
     use_cases = provide_all(*S_USE_CASES)

@@ -32,3 +32,18 @@ class SlotGrantKey(StorageKey, prefix="s_slot"):
     """An open temporary device slot, by the subscription's stored remna id."""
 
     remna_id: str
+
+
+@dataclass(frozen=True)
+class InactiveWarningKey(StorageKey, prefix="s_inactive_warned"):
+    """When the deletion warning went out, for one lapse of one subscription.
+
+    ``lapse`` pins it to this particular expiry: renewing and lapsing again
+    must warn again, not delete on the strength of an old warning.
+    """
+
+    subscription_id: int
+    lapse: int
+
+
+class InactiveListKey(StorageKey, prefix="s_inactive_list"): ...

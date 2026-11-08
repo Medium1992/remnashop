@@ -35,6 +35,7 @@ from .promocode_handlers import getter_promocode, on_promocode_confirm, on_promo
 subscription = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-main"),
+    Format("\n{s_inactive}", when=F["s_inactive"]),
     Row(
         Button(
             text=I18nFormat("btn-subscription.new"),

@@ -7,10 +7,18 @@ from src.core.enums import BannerName
 from src.telegram.s_states import SDashboard
 from src.telegram.states import DashboardRemnashop
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
-from src.telegram.widgets.kbd import Button, Column, Row, Select, Start, SwitchTo
+from src.telegram.widgets.kbd import (
+    Button,
+    Column,
+    Row,
+    ScrollingGroup,
+    Select,
+    Start,
+    SwitchTo,
+)
 from src.telegram.window import Window
 
-from .getters import s_getter
+from .getters import inactive_list_getter, s_getter
 from .handlers import (
     on_back_from_number,
     on_back_to_kind,
@@ -19,6 +27,7 @@ from .handlers import (
     on_channel_reset,
     on_channel_select,
     on_channel_toggle,
+    on_inactive_select,
     on_number_input,
     on_number_request,
     on_preview_request,
@@ -82,6 +91,13 @@ main = Window(
             I18nFormat("btn-s.stale", enabled=F["stale_enabled"]),
             id="stale",
             state=SDashboard.STALE,
+        )
+    ),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-s.inactive", enabled=F["inactive_enabled"]),
+            id="inactive",
+            state=SDashboard.INACTIVE,
         )
     ),
     Row(
@@ -169,6 +185,51 @@ stale = Window(
     getter=s_getter,
 )
 
+inactive = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.inactive"),
+    Row(_toggle("inactive_enabled")),
+    Row(_number("inactive_days"), _number("inactive_warn")),
+    Row(_toggle("inactive_include_disabled")),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-s.inactive-list"), id="inactive_list", state=SDashboard.INACTIVE_LIST
+        )
+    ),
+    _back(),
+    IgnoreUpdate(),
+    state=SDashboard.INACTIVE,
+    getter=s_getter,
+)
+
+inactive_list = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.inactive-list"),
+    ScrollingGroup(
+        Select(
+            I18nFormat(
+                "btn-s.inactive-item",
+                name=F["item"]["name"],
+                status=F["item"]["status"],
+                since=F["item"]["since"],
+                online=F["item"]["online"],
+            ),
+            id="inactive_select",
+            item_id_getter=lambda item: item["user_id"],
+            items="inactive",
+            on_click=on_inactive_select,
+        ),
+        id="inactive_scroll",
+        width=1,
+        height=8,
+        hide_on_single_page=True,
+    ),
+    _back(SDashboard.INACTIVE),
+    IgnoreUpdate(),
+    state=SDashboard.INACTIVE_LIST,
+    getter=inactive_list_getter,
+)
+
 routers = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-dashboard.routers"),
@@ -209,4 +270,16 @@ confirm_send = Window(
     getter=s_getter,
 )
 
-router = Dialog(main, slots, versions, channel, stale, routers, number, target, confirm_send)
+router = Dialog(
+    main,
+    slots,
+    versions,
+    channel,
+    stale,
+    inactive,
+    inactive_list,
+    routers,
+    number,
+    target,
+    confirm_send,
+)

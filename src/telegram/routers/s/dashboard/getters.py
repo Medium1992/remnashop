@@ -9,6 +9,7 @@ from src.application.common.dao import SettingsDao
 from src.application.use_cases.s.settings import NUMBER_FIELDS
 from src.core.utils.client_versions import merge_sources
 from src.infrastructure.services.s.client_versions import ClientVersionsService
+from src.infrastructure.services.s.inactive import InactiveProfiles
 
 STATUS_ICONS = {"ok": "🟢", "fallback": "🟡", "error": "🔴", "disabled": "⚫", "unset": "⚪"}
 
@@ -66,6 +67,10 @@ async def s_getter(
         "stale_enabled": int(s.stale.enabled),
         "stale_hours": s.stale.stale_hours,
         "stale_interval": s.stale.interval_days,
+        "inactive_enabled": int(s.inactive.enabled),
+        "inactive_days": s.inactive.delete_after_days,
+        "inactive_warn": s.inactive.warn_days,
+        "inactive_include_disabled": int(s.inactive.include_disabled),
         "routers": "\n".join(f"<code>{h}</code>" for h in s.router_hwids) or "—",
         "routers_count": len(s.router_hwids),
         "kind": dialog_manager.dialog_data.get("s_kind", "stale"),
@@ -101,3 +106,13 @@ async def s_getter(
         data.update({"field": field.replace(".", "-"), "field_low": low, "field_high": high})
 
     return data
+
+
+@inject
+async def inactive_list_getter(
+    dialog_manager: DialogManager,
+    inactive: FromDishka[InactiveProfiles],
+    **kwargs: Any,
+) -> dict[str, Any]:
+    rows = await inactive.listing()
+    return {"inactive": rows, "inactive_count": len(rows)}

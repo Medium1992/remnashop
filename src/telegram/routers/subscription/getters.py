@@ -20,6 +20,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.telegram.routers.s.subscription import subscription_extra as s_subscription_extra
 
 
 def _get_gateway_title(i18n: TranslatorRunner, gateway: PaymentGatewayDto) -> str:
@@ -42,6 +43,8 @@ async def subscription_getter(
     return {
         "has_active_subscription": has_active,
         "is_not_unlimited": not is_unlimited,
+        # s edition: when a lapsed profile is deleted.
+        **await s_subscription_extra(dialog_manager, current_subscription),
     }
 
 

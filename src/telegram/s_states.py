@@ -9,6 +9,8 @@ class SDashboard(StatesGroup):
     VERSIONS = State()
     CHANNEL = State()
     STALE = State()
+    INACTIVE = State()
+    INACTIVE_LIST = State()
     ROUTERS = State()
     NUMBER = State()
     TARGET = State()
