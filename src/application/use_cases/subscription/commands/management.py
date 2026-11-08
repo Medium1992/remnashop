@@ -299,8 +299,10 @@ class ToggleExternalSquad(Interactor[ToggleExternalSquadDto, None]):
         )
 
 
-# How far ahead "end now" is set: the panel only accepts a future expiry.
-END_NOW_MARGIN = timedelta(minutes=1)
+# How far ahead "end now" is set. The panel only accepts a future expiry and
+# judges it by its own clock, so this also absorbs a few minutes of drift
+# between the bot's server and the panel's.
+END_NOW_MARGIN = timedelta(minutes=5)
 
 
 @dataclass(frozen=True)
@@ -347,9 +349,9 @@ class AddSubscriptionDuration(Interactor[AddSubscriptionDurationDto, None]):
                         f"{actor.log} Invalid expire time for '{target_user.remna_name}'"
                     )
                 # Taking more than remains ends the subscription. The panel
-                # refuses a past date, so it gets one just ahead; its own
-                # expiry job (every 30 s) then expires the user and the usual
-                # "expired" webhook follows.
+                # refuses a past date, so it gets one a few minutes ahead; its
+                # own expiry job (every 30 s) then expires the user and the
+                # usual "expired" webhook follows.
                 new_expire = now + END_NOW_MARGIN
 
             subscription.expire_at = new_expire

@@ -103,5 +103,5 @@ class TestActive:
         subscription, panel, now = await add(-1, expires_in_days=0.5)
 
         # The panel takes no past date; just ahead, and its expiry job does the rest.
-        assert now < subscription.expire_at <= now + timedelta(minutes=1, seconds=5)
+        assert now < subscription.expire_at <= now + timedelta(minutes=5, seconds=5)
         assert panel.sent
