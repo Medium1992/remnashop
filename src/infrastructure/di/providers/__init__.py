@@ -10,6 +10,7 @@ from .payment_gateways import PaymentGatewaysProvider
 from .redis import RedisProvider
 from .remnawave import RemnawaveProvider
 from .retort import RetortProvider
+from .s import SProvider
 from .services import ServicesProvider
 from .use_cases import UseCasesProvider
 
@@ -29,6 +30,7 @@ def get_aiogram_providers() -> list[Provider]:
         RetortProvider(),
         ServicesProvider(),
         UseCasesProvider(),
+        SProvider(),
     ]
 
 
@@ -46,4 +48,5 @@ def get_taskiq_providers() -> list[Provider]:
         RetortProvider(),
         ServicesProvider(),
         UseCasesProvider(),
+        SProvider(),
     ]
