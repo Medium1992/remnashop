@@ -161,7 +161,7 @@ class DeviceJobs:
             await self.notifier.notify_user(admin, payload=payload)
             return
 
-        if isinstance(targets, list) and targets and isinstance(targets[0], OutdatedTarget):
+        if kind == ReminderKind.VERSIONS:
             report = await self.reminders.send_outdated(
                 targets,  # type: ignore[arg-type]
                 interval,
