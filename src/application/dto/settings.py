@@ -21,6 +21,7 @@ from src.core.enums import (
 from src.core.types import NotificationType
 
 from .base import BaseDto, TimestampMixin, TrackableMixin
+from .s_settings import SSettingsDto
 
 
 def get_default_notifications() -> dict[str, bool]:
@@ -227,6 +228,7 @@ class ExtraSettingsDto(TrackableMixin):
     referral_reset: ResetFeatureSettingsDto = field(default_factory=ResetFeatureSettingsDto)
     trial_channel_guard: bool = False
     mini_app_reserve: bool = False
+    s: SSettingsDto = field(default_factory=SSettingsDto)
 
 
 @dataclass(kw_only=True)
