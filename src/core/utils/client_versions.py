@@ -139,7 +139,19 @@ DEFAULT_SOURCES: Sources = {
 
 # Keys an admin may change on a channel from the dashboard.
 EDITABLE_KEYS = frozenset(
-    {"type", "repo", "asset", "url", "app_id", "countries", "package", "version", "enabled"}
+    {
+        "type",
+        "repo",
+        "asset",
+        "url",
+        "app_id",
+        "countries",
+        "package",
+        "hl",
+        "gl",
+        "version",
+        "enabled",
+    }
 )
 
 
@@ -410,3 +422,89 @@ def check_install(
         primary=primary,
         alternatives=tuple(alternatives),
     )
+
+
+# ── admin input ──────────────────────────────────────────────────────────────
+
+_APPSTORE_RE = re.compile(r"apps\.apple\.com/([a-z]{2})/[^\s]*?/id(\d+)", re.I)
+_APPSTORE_ID_RE = re.compile(r"^id?(\d{6,12})$", re.I)
+_GITHUB_RE = re.compile(r"github\.com/([\w.-]+/[\w.-]+)", re.I)
+_PLAY_RE = re.compile(r"play\.google\.com/store/apps/details\?(?:[^\s]*&)?id=([\w.]+)", re.I)
+_PLAY_GL_RE = re.compile(r"[?&]gl=([A-Za-z]{2})")
+_PLAY_HL_RE = re.compile(r"[?&]hl=([A-Za-z]{2})")
+_REPO_RE = re.compile(r"^[\w.-]+/[\w.-]+$")
+_VERSION_RE = re.compile(r"^\d+(\.\d+)*$")
+_CLEAR = frozenset({"-", "—", "clear", "очистить"})
+
+
+@dataclass(frozen=True)
+class SourceInput:
+    """An admin's message, read as a change to one channel.
+
+    ``kind`` names what was understood, for the reply: appstore, appstore-id,
+    play, github, repo, version, url, clear -- or None when nothing was.
+    """
+
+    patch: Optional[dict[str, Any]]
+    kind: Optional[str]
+    value: str = ""
+
+
+def _appstore(value: str) -> Optional[SourceInput]:
+    m = _APPSTORE_RE.search(value)
+    if m:
+        country, app_id = m.group(1).lower(), int(m.group(2))
+        patch = {"app_id": app_id, "countries": [country], "url": value, "type": "appstore"}
+        return SourceInput(patch, "appstore", f"{app_id} / {country}")
+    m = _APPSTORE_ID_RE.match(value)
+    if m:
+        return SourceInput({"app_id": int(m.group(1)), "type": "appstore"}, "appstore", m.group(1))
+    return None
+
+
+def _play(value: str) -> Optional[SourceInput]:
+    m = _PLAY_RE.search(value)
+    if not m:
+        return None
+    patch: dict[str, Any] = {"type": "play", "package": m.group(1), "url": value}
+    gl, hl = _PLAY_GL_RE.search(value), _PLAY_HL_RE.search(value)
+    if gl:
+        patch["gl"] = gl.group(1).upper()
+    if hl:
+        patch["hl"] = hl.group(1).lower()
+    return SourceInput(patch, "play", m.group(1))
+
+
+def _github(value: str) -> Optional[SourceInput]:
+    m = _GITHUB_RE.search(value)
+    if m:
+        repo = m.group(1).rstrip("/")
+        patch: dict[str, Any] = {"repo": repo}
+        if "/releases/" in value or value.endswith((".apk", ".exe", ".dmg", ".zip")):
+            patch["url"] = value
+        return SourceInput(patch, "github", repo)
+    if _REPO_RE.match(value):
+        return SourceInput({"repo": value}, "github", value)
+    return None
+
+
+def _plain(value: str) -> Optional[SourceInput]:
+    if _VERSION_RE.match(value):
+        # Works whatever the channel was before; a reset brings the source back.
+        return SourceInput({"version": value, "type": "manual"}, "version", value)
+    if value.lower().startswith("http"):
+        return SourceInput({"url": value}, "url", value)
+    return None
+
+
+def parse_source_input(text: str) -> SourceInput:
+    value = (text or "").strip()
+    if not value:
+        return SourceInput(None, None)
+    if value.lower() in _CLEAR:
+        return SourceInput({"version": ""}, "clear")
+    for reader in (_appstore, _play, _github, _plain):
+        result = reader(value)
+        if result:
+            return result
+    return SourceInput(None, None)

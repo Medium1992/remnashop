@@ -8,6 +8,7 @@ its release tag, Google Play's listing lagging a staged rollout.
 import pytest
 
 from src.core.utils.client_versions import (
+    EDITABLE_KEYS,
     ROUTER_PLATFORM,
     ChannelState,
     ClientInfo,
@@ -20,6 +21,7 @@ from src.core.utils.client_versions import (
     observed_for,
     observed_versions,
     parse_client,
+    parse_source_input,
 )
 
 
@@ -183,3 +185,41 @@ class TestObserved:
         cache = VersionsCache(observed={"happ/ios/4": "4.2.0", "happ/ios/5": "5.6.0"})
         channel = merge_sources({})["happ"]["channels"]["ios_ru"]
         assert observed_for(cache, "happ", channel) == "4.2.0"
+
+
+class TestSourceInput:
+    @pytest.mark.parametrize(
+        "text, kind, patch",
+        [
+            (
+                "https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6788279553",
+                "appstore",
+                {"app_id": 6788279553, "countries": ["ru"], "type": "appstore"},
+            ),
+            ("id6504287215", "appstore", {"app_id": 6504287215, "type": "appstore"}),
+            ("Happ-proxy/happ-android", "github", {"repo": "Happ-proxy/happ-android"}),
+            (
+                "https://github.com/INCY-DEV/incy-platforms/releases/latest/download/Incy.apk",
+                "github",
+                {"repo": "INCY-DEV/incy-platforms"},
+            ),
+            (
+                "https://play.google.com/store/apps/details?id=com.happproxy&hl=en&gl=US",
+                "play",
+                {"type": "play", "package": "com.happproxy", "gl": "US", "hl": "en"},
+            ),
+            ("4.13.0", "version", {"version": "4.13.0", "type": "manual"}),
+            ("-", "clear", {"version": ""}),
+            ("https://example.com/get", "url", {"url": "https://example.com/get"}),
+        ],
+    )
+    def test_understood(self, text: str, kind: str, patch: dict) -> None:
+        result = parse_source_input(text)
+        assert result.kind == kind
+        assert result.patch is not None
+        assert {k: result.patch[k] for k in patch} == patch
+        assert set(result.patch) <= EDITABLE_KEYS
+
+    @pytest.mark.parametrize("text", ["", "   ", "hello there", "4.x"])
+    def test_not_understood(self, text: str) -> None:
+        assert parse_source_input(text).patch is None

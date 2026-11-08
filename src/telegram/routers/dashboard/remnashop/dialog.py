@@ -7,6 +7,7 @@ from magic_filter import F
 from src.application.common.policy import Permission
 from src.core.enums import BannerName
 from src.telegram.keyboards import main_menu_button
+from src.telegram.s_states import SDashboard
 from src.telegram.states import (
     Dashboard,
     DashboardRemnashop,
@@ -101,6 +102,12 @@ remnashop = Window(
             text=I18nFormat("btn-remnashop.extra"),
             id="extra",
             state=RemnashopExtra.MAIN,
+            when=require_permission(Permission.VIEW_EXTRA_SETTINGS),
+        ),
+        Start(
+            text=I18nFormat("btn-s.section"),
+            id="s_section",
+            state=SDashboard.MAIN,
             when=require_permission(Permission.VIEW_EXTRA_SETTINGS),
         ),
     ),

@@ -1,6 +1,7 @@
 from aiogram import Router
 
 from . import dashboard, extra, menu, subscription
+from .s.dashboard import dialog as s_dashboard_dialog
 
 
 def setup_routers(router: Router) -> None:
@@ -36,6 +37,7 @@ def setup_routers(router: Router) -> None:
         dashboard.remnashop.backup.dialog.router,
         dashboard.remnashop.advertising.dialog.router,
         dashboard.remnashop.extra.dialog.router,
+        s_dashboard_dialog.router,
         #
         dashboard.users.dialog.router,
         dashboard.users.user.dialog.router,

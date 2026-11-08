@@ -6,11 +6,13 @@ scheduled run in production.
 """
 
 import pytest
+from aiogram import Router
 
 from src.application.common import Remnawave
 from src.core.config import AppConfig
 from src.infrastructure.di.ioc import create_aiogram_container, create_taskiq_container
 from src.infrastructure.services.s.remnawave import SRemnawave
+from src.telegram.routers import setup_routers
 
 
 @pytest.mark.parametrize("factory", [create_aiogram_container, create_taskiq_container])
@@ -26,3 +28,9 @@ def test_the_panel_client_is_the_s_one() -> None:
         if key.type_hint is Remnawave
     ]
     assert sources == [SRemnawave]
+
+
+def test_the_routers_assemble_with_the_s_dialog() -> None:
+    root = Router()
+    setup_routers(root)
+    assert any(r.name == "SDashboard" or "SDashboard" in str(r) for r in root.sub_routers)

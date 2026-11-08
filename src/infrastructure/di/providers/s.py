@@ -1,6 +1,7 @@
-from dishka import AnyOf, Provider, Scope, provide
+from dishka import AnyOf, Provider, Scope, provide, provide_all
 
 from src.application.common import Remnawave
+from src.application.use_cases.s import S_USE_CASES
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.jobs import DeviceJobs
@@ -27,3 +28,5 @@ class SProvider(Provider):
     device_reminders = provide(source=DeviceReminders)
     device_jobs = provide(source=DeviceJobs)
     slots = provide(source=SlotService)
+
+    use_cases = provide_all(*S_USE_CASES)

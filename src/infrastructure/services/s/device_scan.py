@@ -65,16 +65,21 @@ class DeviceScanner:
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
 
-    async def _subscribers(self) -> list[tuple[UserDto, SubscriptionDto]]:
+    async def _subscribers(self, only: Optional[int]) -> list[tuple[UserDto, SubscriptionDto]]:
+        if only is not None:
+            one = await self.user_dao.get_by_telegram_id(only)
+            users = [one] if one else []
+        else:
+            users = await self.user_dao.get_with_active_subscription()
         pairs = []
-        for user in await self.user_dao.get_with_active_subscription():
+        for user in users:
             subscription = await self.subscription_dao.get_current(user.id)
             if subscription and subscription.is_active:
                 pairs.append((user, subscription))
         return pairs
 
-    async def scan(self) -> DeviceScan:
-        pairs = await self._subscribers()
+    async def scan(self, only_telegram_id: Optional[int] = None) -> DeviceScan:
+        pairs = await self._subscribers(only_telegram_id)
         semaphore = asyncio.Semaphore(PANEL_CONCURRENCY)
 
         async def read(user: UserDto, sub: SubscriptionDto) -> Optional[UserDevices]:
