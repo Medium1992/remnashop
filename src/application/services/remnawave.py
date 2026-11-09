@@ -34,7 +34,7 @@ from src.application.use_cases.remnawave.commands.synchronization import (
     SyncRemnaUserDto,
 )
 from src.core.config import AppConfig
-from src.core.constants import DATETIME_VIEW_FORMAT, IMPORTED_TAG, T_ME, TIME_1H
+from src.core.constants import DATETIME_VIEW_FORMAT, IMPORTED_TAG, TIME_1H
 from src.core.enums import SubscriptionStatus, UserNotificationType
 from src.core.types import RemnaUserDto
 from src.core.utils.converters import country_code_to_flag
@@ -299,8 +299,9 @@ class RemnaWebhookService:
         if not user:
             logger.warning(f"Local user not found for remna_uuid '{remna_user.id}'")
             return
-        support_url = f"{T_ME}{self.config.bot.support_username.get_secret_value()}"
-        await self.event_bus.publish(UserNotConnectedEvent(user=user, support_url=support_url))
+        await self.event_bus.publish(
+            UserNotConnectedEvent(user=user, support_url=self.bot_service.get_support_url())
+        )
 
     async def handle_torrent_blocker_event(self, report: TorrentBlockerReportDto) -> None:
         logger.info("Received torrent blocker webhook event")

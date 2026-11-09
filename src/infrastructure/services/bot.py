@@ -7,6 +7,7 @@ from aiogram.utils.chat_member import ChatMemberUnion
 from src.core.config import AppConfig
 from src.core.constants import T_ME
 from src.core.enums import Deeplink
+from src.core.utils.s_support import support_url_override
 
 
 class BotService:
@@ -66,6 +67,8 @@ class BotService:
         return Deeplink.ADVERTISING.build_url(base_url, code)
 
     def get_support_url(self, text: Optional[str] = None) -> str:
+        if override := support_url_override():
+            return override
         base_url = f"{T_ME}{self.config.bot.support_username.get_secret_value()}"
         encoded_text = quote(text or "")
         return f"{base_url}?text={encoded_text}"
