@@ -17,7 +17,9 @@ from src.core.utils.i18n_helpers import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.time import get_traffic_reset_delta
+from src.infrastructure.services.s.invites import InviteLinks
 from src.telegram.routers.s.devices import devices_extra as s_devices_extra
+from src.telegram.routers.s.invites import invite_extra as s_invite_extra
 
 
 @inject
@@ -221,12 +223,13 @@ async def invite_getter(
     i18n: FromDishka[TranslatorRunner],
     settings_dao: FromDishka[SettingsDao],
     referral_dao: FromDishka[ReferralDao],
+    invite_links: FromDishka[InviteLinks],
     **kwargs: Any,
 ) -> dict[str, Any]:
     settings = await settings_dao.get()
     referrals = await referral_dao.get_referrals_count(user.id)
     payments = await referral_dao.get_referrals_with_payment_count(user.id)
-    referral_url = await bot_service.get_referral_url(user.referral_code)
+    referral_url = await invite_links.referral_url(user)
     support_url = bot_service.get_support_url(text=i18n.get("message.withdraw-points"))
 
     return {
@@ -239,6 +242,7 @@ async def invite_getter(
         "referral_url": referral_url,
         "withdraw": support_url,
         "referral_reset_enabled": int(settings.extra.referral_reset.enabled),
+        **await s_invite_extra(invite_links, user),
     }
 
 

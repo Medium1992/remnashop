@@ -47,3 +47,20 @@ class InactiveWarningKey(StorageKey, prefix="s_inactive_warned"):
 
 
 class InactiveListKey(StorageKey, prefix="s_inactive_list"): ...
+
+
+@dataclass(frozen=True)
+class InviteTokenKey(StorageKey, prefix="s_invite"):
+    """A live one-time invite link; the value is its owner's user id.
+
+    The key's TTL is the link's lifetime, and using the link deletes it.
+    """
+
+    token: str
+
+
+@dataclass(frozen=True)
+class InviteOwnerKey(StorageKey, prefix="s_invites"):
+    """The one-time links a user has issued, newest last (JSON)."""
+
+    user_id: int

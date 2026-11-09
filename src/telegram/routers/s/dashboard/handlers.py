@@ -40,6 +40,7 @@ TOGGLES = {
     "stale_enabled": "stale.enabled",
     "inactive_enabled": "inactive.enabled",
     "inactive_include_disabled": "inactive.include_disabled",
+    "invites_enabled": "invites.enabled",
 }
 
 # Button id -> (number setting, window to come back to).
@@ -53,6 +54,8 @@ NUMBERS = {
     "stale_interval": ("stale.interval_days", SDashboard.STALE),
     "inactive_days": ("inactive.delete_after_days", SDashboard.INACTIVE),
     "inactive_warn": ("inactive.warn_days", SDashboard.INACTIVE),
+    "invites_ttl": ("invites.ttl_hours", SDashboard.INVITES),
+    "invites_max": ("invites.max_active", SDashboard.INVITES),
 }
 
 

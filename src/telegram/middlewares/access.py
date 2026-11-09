@@ -38,7 +38,7 @@ class AccessMiddleware(EventTypedMiddleware):
         container: AsyncContainer = data[CONTAINER_KEY]
         check_access = await container.get(CheckAccess)
 
-        raw_referral_code = parse_referral_code(event)
+        raw_referral_code = parse_referral_code(event, data)
         is_referral_event = False
         if raw_referral_code:
             validate_referral_code = await container.get(ValidateReferralCode)

@@ -44,7 +44,7 @@ class UserMiddleware(EventTypedMiddleware):
             return
 
         is_chat_member_event = isinstance(event, ChatMemberUpdated)
-        referral_code = parse_referral_code(event)
+        referral_code = parse_referral_code(event, data)
         ad_link_code = parse_ad_link_code(event)
 
         container: AsyncContainer = data[CONTAINER_KEY]

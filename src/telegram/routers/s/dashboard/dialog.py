@@ -100,6 +100,13 @@ main = Window(
             state=SDashboard.INACTIVE,
         )
     ),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-s.invites", enabled=F["invites_enabled"]),
+            id="invites",
+            state=SDashboard.INVITES,
+        )
+    ),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(
         SwitchTo(
@@ -203,6 +210,17 @@ inactive = Window(
     getter=s_getter,
 )
 
+invites = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.invites"),
+    Row(_toggle("invites_enabled")),
+    Row(_number("invites_ttl"), _number("invites_max")),
+    _back(),
+    IgnoreUpdate(),
+    state=SDashboard.INVITES,
+    getter=s_getter,
+)
+
 inactive_list = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-dashboard.inactive-list"),
@@ -301,6 +319,7 @@ router = Dialog(
     stale,
     inactive,
     inactive_list,
+    invites,
     blocked,
     routers,
     number,

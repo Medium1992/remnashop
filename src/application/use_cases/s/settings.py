@@ -24,6 +24,8 @@ NUMBER_FIELDS: Final[dict[str, tuple[int, int]]] = {
     "inactive.delete_after_days": (1, 3650),
     "inactive.warn_days": (0, 60),
     "chat_access.grace_hours": (0, 24 * 30),
+    "invites.ttl_hours": (1, 24 * 7),
+    "invites.max_active": (1, 20),
 }
 
 TOGGLE_FIELDS: Final[frozenset[str]] = frozenset(
@@ -36,6 +38,7 @@ TOGGLE_FIELDS: Final[frozenset[str]] = frozenset(
         "inactive.enabled",
         "inactive.include_disabled",
         "chat_access.enabled",
+        "invites.enabled",
     }
 )
 

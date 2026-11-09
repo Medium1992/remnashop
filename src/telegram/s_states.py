@@ -13,6 +13,7 @@ class SDashboard(StatesGroup):
     INACTIVE_LIST = State()
     BLOCKED = State()
     ROUTERS = State()
+    INVITES = State()
     NUMBER = State()
     TARGET = State()
     CONFIRM_SEND = State()

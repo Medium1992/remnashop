@@ -17,6 +17,7 @@ from loguru import logger
 from src.application.common import BotService, TranslatorRunner
 from src.application.common.dao import UserDao
 from src.core.constants import INLINE_QUERY_INVITE
+from src.infrastructure.services.s.invites import InviteLinks
 
 router = Router(name=__name__)
 
@@ -28,6 +29,7 @@ async def handle_inline_query(
     user_dao: FromDishka[UserDao],
     bot_service: FromDishka[BotService],
     i18n: FromDishka[TranslatorRunner],
+    invite_links: FromDishka[InviteLinks],
 ) -> None:
     user = await user_dao.get_by_telegram_id(inline_query.from_user.id)
 
@@ -40,7 +42,7 @@ async def handle_inline_query(
     logger.info(f"{user.log} Sent inline query {INLINE_QUERY_INVITE}")
 
     result_id = hashlib.md5(inline_query.query.strip().encode()).hexdigest()
-    referral_url = await bot_service.get_referral_url(user.referral_code)
+    referral_url = await invite_links.referral_url(user)
     bot_name = await bot_service.get_my_name()
 
     builder = InlineKeyboardBuilder()

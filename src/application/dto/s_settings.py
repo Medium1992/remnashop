@@ -64,12 +64,25 @@ class ChatAccessSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class InviteLinksSettingsDto(TrackableMixin):
+    """One-time referral links: each opens the bot for one new user, then dies.
+
+    While on, the permanent ``ref_<code>`` links stop bringing referrals.
+    """
+
+    enabled: bool = False
+    ttl_hours: int = 24
+    max_active: int = 3
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
     stale: StaleSubscriptionSettingsDto = field(default_factory=StaleSubscriptionSettingsDto)
     inactive: InactiveCleanupSettingsDto = field(default_factory=InactiveCleanupSettingsDto)
     chat_access: ChatAccessSettingsDto = field(default_factory=ChatAccessSettingsDto)
+    invites: InviteLinksSettingsDto = field(default_factory=InviteLinksSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

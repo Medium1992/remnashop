@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from aiogram.types import Message, TelegramObject
 from loguru import logger
@@ -24,7 +24,13 @@ def _parse_deeplink_code(event: TelegramObject, deeplink: Deeplink) -> Optional[
     return None
 
 
-def parse_referral_code(event: TelegramObject) -> Optional[str]:
+def parse_referral_code(
+    event: TelegramObject, data: Optional[dict[str, Any]] = None
+) -> Optional[str]:
+    # s edition: a one-time invite link is read as its owner's code, a dead
+    # one as no code at all (middlewares/s_invites.py).
+    if data is not None and "s_referral_code" in data:
+        return data["s_referral_code"] or None
     return _parse_deeplink_code(event, Deeplink.REFERRAL)
 
 

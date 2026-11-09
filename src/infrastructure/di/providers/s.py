@@ -7,6 +7,7 @@ from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.inactive import InactiveProfiles
+from src.infrastructure.services.s.invites import InviteLinks
 from src.infrastructure.services.s.jobs import DeviceJobs
 from src.infrastructure.services.s.reminders import DeviceReminders
 from src.infrastructure.services.s.remnawave import SRemnawave
@@ -34,5 +35,6 @@ class SProvider(Provider):
     inactive = provide(source=InactiveProfiles)
     block_dao = provide(source=UserBlockDao)
     blocks = provide(source=BlockService)
+    invites = provide(source=InviteLinks)
 
     use_cases = provide_all(*S_USE_CASES)

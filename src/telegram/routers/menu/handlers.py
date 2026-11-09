@@ -8,7 +8,7 @@ from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
-from src.application.common import BotService, Notifier, Redirect, TranslatorRunner
+from src.application.common import Notifier, Redirect, TranslatorRunner
 from src.application.common.dao import SettingsDao, SubscriptionDao
 from src.application.dto import (
     MediaDescriptorDto,
@@ -34,6 +34,7 @@ from src.core.enums import MediaType
 from src.core.exceptions import CooldownError
 from src.core.utils.i18n_helpers import i18n_format_expire_time
 from src.core.utils.time import get_traffic_reset_delta
+from src.infrastructure.services.s.invites import InviteLinks
 from src.telegram.keyboards import CALLBACK_CHANNEL_CONFIRM, CALLBACK_RULES_ACCEPT
 from src.telegram.states import MainMenu, Subscription
 
@@ -255,13 +256,13 @@ async def on_show_qr(
     callback: CallbackQuery,
     widget: Button,
     dialog_manager: DialogManager,
-    bot_service: FromDishka[BotService],
+    invite_links: FromDishka[InviteLinks],
     generate_referral_qr: FromDishka[GenerateReferralQr],
     notifier: FromDishka[Notifier],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
 
-    referral_url = await bot_service.get_referral_url(user.referral_code)
+    referral_url = await invite_links.referral_url(user)
     referral_qr = await generate_referral_qr.system(referral_url)
 
     await notifier.notify_user(

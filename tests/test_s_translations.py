@@ -33,7 +33,8 @@ NUMERIC = """
     versions_notify versions_ignore_patch versions_interval versions_refresh versions_checked
     stale_enabled stale_hours stale_interval routers_count ch_enabled ch_checked field_low
     field_high inactive_days inactive_warn inactive_enabled blocked blocked_count
-    inactive_include_disabled
+    inactive_include_disabled invites_enabled invites_ttl invites_max max_active s_invite_hours
+    s_invite_active s_invite_max
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title
