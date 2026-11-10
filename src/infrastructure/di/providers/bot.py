@@ -9,6 +9,7 @@ from dishka import Provider, Scope, from_context, provide
 from loguru import logger
 
 from src.core.config import AppConfig
+from src.telegram.s_button_colors import SButtonColors
 
 
 def _normalize_proxy_url(url: str) -> str:
@@ -41,4 +42,6 @@ class BotProvider(Provider):
             default=DefaultBotProperties(parse_mode=ParseMode.HTML),
             session=session,
         ) as bot:
+            # s edition: every inline button blue unless it says otherwise.
+            bot.session.middleware(SButtonColors())
             yield bot

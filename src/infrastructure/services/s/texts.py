@@ -10,6 +10,7 @@ living in a bundle of their own: an edited text may refer to a built-in one
 """
 
 import asyncio
+import html
 import os
 import re
 import textwrap
@@ -40,6 +41,10 @@ CUSTOM_FILE: Final[str] = "custom.ftl"
 # How often a process looks at custom.ftl for changes.
 RELOAD_SECONDS: Final[float] = 2.0
 SEARCH_LIMIT: Final[int] = 40
+# Shorter query lines ("ok", an emoji) would match half the texts.
+MIN_LINE: Final[int] = 4
+# With no whole line found: the share of the query's words a text must have.
+WORDS_SHARE: Final[float] = 0.6
 
 _PROBE: Final[str] = "s-probe"
 _INDENT: Final[str] = "    "
@@ -226,6 +231,15 @@ def write_override(path: Path, key: str, pattern: Optional[ast.Pattern]) -> None
     os.replace(temporary, path)
 
 
+def _searchable(text: str) -> str:
+    """Lower-case lines without tags; a placeholder breaks the line, so a
+    query line never matches across the value filled in there."""
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"\{[^{}]*\}", "\n", text)
+    lines = (" ".join(line.split()) for line in html.unescape(text).casefold().split("\n"))
+    return "\n".join(line for line in lines if line)
+
+
 # ── the storage every process reads texts from ───────────────────────────────
 
 
@@ -403,17 +417,39 @@ class TextOverrides:
         return found
 
     def search(self, query: str) -> list[TextEntry]:
-        needle = " ".join(query.split()).casefold()
-        if not needle:
+        """Texts with the key, or with any line of ``query`` in them.
+
+        The query is usually pasted from a message the bot sent: the tags are
+        gone and the placeholders are filled in ("FinalMask" for
+        ``{ $bot_name }``). So each line is looked for on its own, and the
+        texts are compared without their tags; those matching more lines
+        come first.
+        """
+        every = _searchable(query).split("\n")
+        lines = [line for line in every if len(line) >= MIN_LINE] or every
+        key = " ".join(query.split()).casefold()
+        if not key:
             return []
-        found = [
-            e
-            for e in self.entries()
-            if needle in e.key.casefold()
-            or needle in " ".join(e.text.split()).casefold()
-            or needle in " ".join(e.default_text.split()).casefold()
-        ]
-        return found[:SEARCH_LIMIT]
+        entries = self.entries()
+        texts = [{_searchable(e.text), _searchable(e.default_text)} for e in entries]
+
+        scored = []
+        for number, (entry, haystack) in enumerate(zip(entries, texts)):
+            hits = sum(any(line in text for text in haystack) for line in lines)
+            if key in entry.key.casefold():
+                hits += len(lines) + 1
+            if hits:
+                scored.append((-float(hits), number, entry))
+
+        if not scored:
+            # Not one line as it is: a line may hold a filled-in value only.
+            # Then the texts with most of the query's words in them.
+            words = set(re.findall(r"\w{4,}", " ".join(lines)))
+            for number, (entry, haystack) in enumerate(zip(entries, texts)):
+                found = {w for w in words if any(w in text for text in haystack)}
+                if words and len(found) >= WORDS_SHARE * len(words):
+                    scored.append((-len(found) / len(words), number, entry))
+        return [entry for _, _, entry in sorted(scored)[:SEARCH_LIMIT]]
 
     def changed(self) -> list[TextEntry]:
         return [e for e in self.entries() if e.changed]

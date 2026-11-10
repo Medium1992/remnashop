@@ -91,6 +91,22 @@ class TestSearch:
     def test_case_and_spacing_do_not_matter(self, texts: TextOverrides) -> None:
         assert [e.key for e in texts.search("  НА   обслуживании ")] == [MAINTENANCE]
 
+    def test_a_message_pasted_from_the_chat(self, texts: TextOverrides) -> None:
+        # As the friend gets it: { $bot_name } filled in, no tags.
+        pasted = "🚀 Привет! Хочешь стабильный и быстрый VPN?\n\nFinalMask — поможет тебе с этим!"
+        assert texts.search(pasted)[0].key == "inline-invite.message"
+
+    def test_the_tags_do_not_get_in_the_way(self, texts: TextOverrides) -> None:
+        # "<b>📱 Управление устройствами</b>" in the file, plain on the screen.
+        assert texts.search("📱 Управление устройствами")[0].key == "msg-menu-devices"
+
+    def test_only_the_line_with_a_filled_in_value(self, texts: TextOverrides) -> None:
+        found = [e.key for e in texts.search("FinalMask — поможет тебе с этим!")]
+        assert "inline-invite.message" in found
+
+    def test_a_short_word(self, texts: TextOverrides) -> None:
+        assert "inline-invite.message" in [e.key for e in texts.search("VPN")]
+
     def test_nothing_for_an_empty_query(self, texts: TextOverrides) -> None:
         assert texts.search("   ") == []
 
