@@ -11,7 +11,7 @@ from httpx import AsyncClient, Timeout
 from loguru import logger
 from starlette.datastructures import Headers
 
-from src.application.dto import PaymentGatewayDto, PaymentResultDto
+from src.application.dto import PaymentGatewayDto, PaymentResultDto, UserDto
 from src.core.config import AppConfig
 from src.core.constants import T_ME
 from src.core.enums import TransactionStatus
@@ -26,6 +26,10 @@ class BasePaymentGateway(ABC):
     bot: Bot
 
     _bot_username: Optional[str]
+
+    # Who pays, for gateways that must send a buyer identifier (Platega).
+    # A new instance is made for every payment, so it never leaks between users.
+    payer: Optional[UserDto] = None
 
     NETWORKS: list[str] = []
 

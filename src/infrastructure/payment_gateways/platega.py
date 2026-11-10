@@ -9,7 +9,7 @@ from fastapi import Request
 from httpx import AsyncClient, HTTPStatusError
 from loguru import logger
 
-from src.application.dto import PaymentGatewayDto, PaymentResultDto
+from src.application.dto import PaymentGatewayDto, PaymentResultDto, UserDto
 from src.application.dto.payment_gateway import PlategaGatewaySettingsDto
 from src.core.config import AppConfig
 from src.core.enums import TransactionStatus
@@ -124,7 +124,32 @@ class PlategaGateway(BasePaymentGateway):
         if self.settings.payment_method is not None:
             payload["paymentMethod"] = self.settings.payment_method
 
+        payload["metadata"] = self._build_metadata()
         return payload
+
+    def _build_metadata(self) -> dict[str, Any]:
+        # Required by the API: the buyer as `user_email`, one stable address per
+        # buyer. Without it the payment page asks the buyer for an email.
+        metadata: dict[str, Any] = {}
+        if self.payer is None:
+            return metadata
+
+        if self.payer.id:
+            metadata["userId"] = str(self.payer.id)
+
+        user_email = self._payer_email(self.payer)
+        if user_email:
+            metadata["user_email"] = user_email
+
+        return metadata
+
+    @staticmethod
+    def _payer_email(payer: UserDto) -> Optional[str]:
+        if payer.telegram_id is not None:
+            return f"{payer.telegram_id}@telegram.org"
+        if payer.email and payer.is_email_verified:
+            return payer.email
+        return None
 
     def _get_payment_data(self, data: dict[str, Any]) -> PaymentResultDto:
         transaction_id_str = data.get("transactionId")
