@@ -1,5 +1,8 @@
+from typing import Final
+
 from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
+from aiogram.fsm.state import StatesGroup
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import DialogManager, ShowMode, StartMode
 from dishka import FromDishka
@@ -8,6 +11,7 @@ from loguru import logger
 
 from src.application.common import Notifier
 from src.application.common.dao import SubscriptionDao
+from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import TelegramUserDto
 from src.application.use_cases.promocode.queries.validate import (
     ValidatePromocode,
@@ -25,6 +29,10 @@ from src.core.exceptions import (
 from src.telegram.states import DashboardUser, MainMenu, Subscription, state_from_string
 
 router = Router(name=__name__)
+
+# Callback data comes from the client and can be forged, so only these are
+# open to everyone; any other state (the dashboard) needs the dashboard permission.
+PUBLIC_STATE_GROUPS: Final[tuple[type[StatesGroup], ...]] = (MainMenu, Subscription)
 
 
 @router.callback_query(F.data.startswith(GOTO_PREFIX))
@@ -52,6 +60,13 @@ async def on_goto(
 
     if not state:
         logger.warning(f"{user.log} Trying go to not exist state '{data}'")
+        await callback.answer()
+        return
+
+    if state.group not in PUBLIC_STATE_GROUPS and not PermissionPolicy.has_permission(
+        user, Permission.VIEW_DASHBOARD
+    ):
+        logger.warning(f"{user.log} Tried to go to '{state}' without the permission")
         await callback.answer()
         return
 
