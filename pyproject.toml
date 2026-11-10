@@ -14,14 +14,14 @@ dependencies = [
     #
     "dishka~=1.7.2",
     "adaptix==3.0.0b11",
-    "aiogram~=3.25.0",
+    "aiogram~=3.31.0",
     "aiohttp-socks>=0.10.0",
-    "aiogram-dialog~=2.5.0",
+    "aiogram-dialog~=2.6.0",
     "fluentogram~=1.2.1",
     #
     "asyncpg~=0.30.0",
     "alembic~=1.16.5",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy~=2.0.45",
     "redis~=7.0.0",
     "taskiq[orjson]~=0.12.1",
     "taskiq-redis~=1.2.1",
@@ -41,8 +41,8 @@ repository = "https://github.com/snoups/remnashop"
 
 [dependency-groups]
 dev = [
-    "aiogram-dialog[tools]~=2.5.0",
-    "sqlalchemy[mypy]>=2.0.0",
+    "aiogram-dialog[tools]~=2.6.0",
+    "sqlalchemy[mypy]~=2.0.45",
     "mypy>=1.18.2",
     "ruff>=0.14.2",
     "pytest>=8.4.2",
@@ -51,6 +51,11 @@ dev = [
     "types-cachetools",
     "pytest-asyncio",
 ]
+
+[tool.uv]
+# remnapy caps cryptography below 47, which leaves the bundled OpenSSL and a
+# few advisories unpatched; it only uses RSA padding, an API that has not moved.
+override-dependencies = ["cryptography>=50.0.2"]
 
 [tool.ruff]
 target-version = "py312"
