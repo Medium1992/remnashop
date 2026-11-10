@@ -74,6 +74,7 @@ from src.core.constants import (
 )
 from src.core.enums import Role
 from src.core.utils.validators import is_positive_int, parse_int
+from src.infrastructure.services.s.invites import InviteLinks
 from src.telegram.keyboards import get_contact_support_keyboard
 from src.telegram.states import DashboardUser, DashboardUsers
 from src.telegram.utils import is_double_click
@@ -211,12 +212,15 @@ async def on_referral_reset(
     dialog_manager: DialogManager,
     reset_user_referral_code: FromDishka[ResetUserReferralCode],
     notifier: FromDishka[Notifier],
+    invite_links: FromDishka[InviteLinks],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     target_user_id = dialog_manager.dialog_data[TARGET_USER_ID]
 
     if is_double_click(dialog_manager, key="referral_reset_confirm", cooldown=10):
         await reset_user_referral_code(user, target_user_id)
+        # s edition: the user's one-time links stop working too.
+        await invite_links.revoke_all(target_user_id)
         await notifier.notify_user(user, i18n_key="ntf-user.referral-reset")
         return
 

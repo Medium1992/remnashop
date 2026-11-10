@@ -136,6 +136,17 @@ class InviteLinks:
             logger.info(f"One-time invite link of '{owner.id}' used")
         return owner
 
+    async def revoke_all(self, user_id: int) -> int:
+        """Kill every live link of the user: a reset referral code means "the
+        links I gave out must stop working", the one-time ones included."""
+        links = await self.live(user_id)
+        for link in links:
+            await self.redis.delete(_token_key(link.token))
+        await self._store(user_id, [])
+        if links:
+            logger.info(f"Revoked {len(links)} one-time invite link(s) of '{user_id}'")
+        return len(links)
+
     async def url(self, link: InviteLink) -> str:
         return await self.bot_service.get_referral_url(link.token)
 

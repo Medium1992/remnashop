@@ -339,6 +339,7 @@ async def on_reset_referral_code(
     dialog_manager: DialogManager,
     reset_own_referral_code: FromDishka[ResetOwnReferralCode],
     notifier: FromDishka[Notifier],
+    invite_links: FromDishka[InviteLinks],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     try:
@@ -352,4 +353,6 @@ async def on_reset_referral_code(
             ),
         )
         return
+    # s edition: the one-time links stop working too; a fresh one is issued.
+    await invite_links.revoke_all(user.id)
     await notifier.notify_user(user=user, i18n_key="ntf-invite.referral-reset")

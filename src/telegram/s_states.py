@@ -17,6 +17,10 @@ class SDashboard(StatesGroup):
     NUMBER = State()
     TARGET = State()
     CONFIRM_SEND = State()
+    TEXTS = State()
+    TEXT_LIST = State()
+    TEXT_VIEW = State()
+    TEXT_CONFIRM = State()
 
 
 class SBlock(StatesGroup):

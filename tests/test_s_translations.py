@@ -33,13 +33,15 @@ NUMERIC = """
     versions_notify versions_ignore_patch versions_interval versions_refresh versions_checked
     stale_enabled stale_hours stale_interval routers_count ch_enabled ch_checked field_low
     field_high inactive_days inactive_warn inactive_enabled blocked blocked_count
-    inactive_include_disabled invites_enabled invites_ttl invites_max max_active s_invite_hours
+    inactive_include_disabled invites_enabled invites_ttl invites_max max_active hours n
+    count texts_changed texts_count text_changed
     s_invite_active s_invite_max plans_calendar
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title
     ch_type ch_where ch_url ch_value ch_published ch_status ch_source routers date since
-    online status reason until s_invite_until
+    online status reason until s_invite_links url texts_mode texts_query text_key
+    text_source text_variables detail
 """
 ARGS: dict[str, Any] = {**dict.fromkeys(NUMERIC.split(), 1), **dict.fromkeys(TEXTUAL.split(), "x")}
 

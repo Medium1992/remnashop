@@ -15,6 +15,10 @@ from src.application.common import Notifier
 from src.application.common.dao import SettingsDao, UserDao
 from src.application.dto import SettingsDto, UserDto
 from src.application.use_cases.access.queries.availability import CheckAccess, CheckAccessDto
+from src.application.use_cases.referral.commands.attachment import (
+    AttachReferral,
+    AttachReferralDto,
+)
 from src.application.use_cases.referral.queries.code import ValidateReferralCode
 from src.application.use_cases.s.settings import NUMBER_FIELDS, TOGGLE_FIELDS
 from src.application.use_cases.user.commands.activity import TrackUserActivity
@@ -25,6 +29,7 @@ from src.application.use_cases.user.commands.registration import (
 )
 from src.core.constants import CONTAINER_KEY
 from src.core.enums import AccessMode, MiddlewareEventType
+from src.core.utils.s_invited import INVITED_BY_LINK
 from src.infrastructure.services.s.invites import (
     TOKEN_LENGTH,
     InviteLink,
@@ -36,6 +41,7 @@ from src.telegram.middlewares._codes import parse_referral_code
 from src.telegram.middlewares.access import AccessMiddleware
 from src.telegram.middlewares.s_invites import SInviteMiddleware, Stage
 from src.telegram.middlewares.user import UserMiddleware
+from src.telegram.routers.s.invites import invite_extra
 
 BOT_URL = "https://t.me/test_bot?start="
 HOUR = 3600.0
@@ -312,9 +318,11 @@ class FakeGetOrCreateUser:
     def __init__(self, users: FakeUserDao) -> None:
         self.users = users
         self.seen: list[Optional[str]] = []
+        self.by_link: list[bool] = []
 
     async def system(self, data: GetOrCreateUserDto) -> Optional[UserDto]:
         self.seen.append(data.referral_code)
+        self.by_link.append(INVITED_BY_LINK.get())
         existing = await self.users.get_by_telegram_id(data.telegram_id)
         if existing:
             return existing
@@ -538,3 +546,145 @@ class TestHooks:
     def test_off_by_default(self) -> None:
         invites = SettingsDto().extra.s.invites
         assert (invites.enabled, invites.ttl_hours, invites.max_active) == (False, 24, 3)
+
+
+# ── the fixes after the first days in use ────────────────────────────────────
+
+
+class TestRegisteredThroughALink:
+    """A spent link records the referral even with the referral system off."""
+
+    async def test_a_spent_link_marks_the_registration(self) -> None:
+        world = World()
+        link = await world.invites.current(OWNER)
+        await world.start(FRIEND_TG, f"/start ref_{link.token}")
+        assert world.registration.by_link == [True]
+        assert INVITED_BY_LINK.get() is False  # reset after the update
+
+    async def test_the_permanent_link_does_not(self) -> None:
+        world = World(enabled=False)
+        await world.start(FRIEND_TG, f"/start ref_{OWNER.referral_code}")
+        assert world.registration.by_link == [False]
+
+    async def test_an_existing_user_does_not(self) -> None:
+        world = World()
+        world.users.users[7] = UserDto(id=7, telegram_id=FRIEND_TG, name="Old")
+        link = await world.invites.current(OWNER)
+        await world.start(FRIEND_TG, f"/start ref_{link.token}")
+        assert world.registration.by_link == [False]
+
+
+class _Uow:
+    async def __aenter__(self) -> "_Uow":
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        pass
+
+    async def commit(self) -> None:
+        pass
+
+
+class _ReferralDao:
+    def __init__(self) -> None:
+        self.created: list[Any] = []
+
+    async def get_referral_chain(self, user_id: int) -> tuple[None, None]:
+        return None, None
+
+    async def create_referral(self, referral: Any) -> None:
+        self.created.append(referral)
+
+
+class _Users(FakeUserDao):
+    async def get_by_referral_code(self, code: str) -> Optional[UserDto]:
+        return next((u for u in self.users.values() if u.referral_code == code), None)
+
+
+class _Events:
+    async def publish(self, event: Any) -> None:
+        pass
+
+
+async def attach(referral_enabled: bool, by_link: bool) -> int:
+    settings = FakeSettingsDao()
+    settings.settings.referral.enable = referral_enabled
+    friend = UserDto(id=2, telegram_id=FRIEND_TG, name="Friend")
+    referrals = _ReferralDao()
+    use_case = AttachReferral(
+        _Uow(),  # type: ignore[arg-type]
+        settings,  # type: ignore[arg-type]
+        _Users(OWNER, friend),  # type: ignore[arg-type]
+        referrals,  # type: ignore[arg-type]
+        _Events(),
+    )
+    marker = INVITED_BY_LINK.set(by_link)
+    try:
+        await use_case.system(AttachReferralDto(user_id=friend.id, referral_code="Ab3dE9"))
+    finally:
+        INVITED_BY_LINK.reset(marker)
+    return len(referrals.created)
+
+
+class TestAttachWithReferralsOff:
+    async def test_a_one_time_link_is_recorded(self) -> None:
+        assert await attach(referral_enabled=False, by_link=True) == 1
+
+    async def test_otherwise_upstream_skips_it(self) -> None:
+        assert await attach(referral_enabled=False, by_link=False) == 0
+
+    async def test_with_referrals_on_nothing_changes(self) -> None:
+        assert await attach(referral_enabled=True, by_link=False) == 1
+
+
+class TestRevoke:
+    async def test_revoking_kills_every_live_link(self) -> None:
+        invites, _ = a_service()
+        first = await invites.current(OWNER)
+        second = await invites.issue(OWNER)
+        assert second is not None
+
+        assert await invites.revoke_all(OWNER.id) == 2
+
+        assert await invites.owner(first.token) is None
+        assert await invites.owner(second.token) is None
+        assert await invites.live(OWNER.id) == []
+
+    async def test_the_next_link_follows_the_current_lifetime(self) -> None:
+        settings = FakeSettingsDao()
+        settings.settings.extra.s.invites.ttl_hours = 1
+        invites, clock = a_service(settings)
+        await invites.current(OWNER)
+        settings.settings.extra.s.invites.ttl_hours = 24
+
+        await invites.revoke_all(OWNER.id)
+        link = await invites.current(OWNER)
+
+        assert link.hours_left(clock()) == 24
+
+
+class _I18n:
+    def get(self, key: str, **kwargs: Any) -> str:
+        return f"{kwargs['n']}|{kwargs['url']}|{kwargs['hours']}"
+
+
+class TestTheInviteScreen:
+    async def test_every_live_link_is_listed_newest_first(self) -> None:
+        settings = FakeSettingsDao()
+        invites, clock = a_service(settings)
+        old = await invites.current(OWNER)
+        clock.now += HOUR
+        new = await invites.issue(OWNER)
+        assert new is not None
+
+        extra = await invite_extra(invites, OWNER, _I18n())  # type: ignore[arg-type]
+
+        assert extra["s_invite_links"].splitlines() == [
+            f"1|{BOT_URL}ref_{new.token}|24",
+            f"2|{BOT_URL}ref_{old.token}|23",
+        ]
+        assert (extra["s_invite_active"], extra["s_invite_can_add"]) == (2, 1)
+
+    async def test_off_shows_nothing(self) -> None:
+        invites, _ = a_service(FakeSettingsDao(enabled=False))
+        assert await invite_extra(invites, OWNER, _I18n()) == {"s_invite": 0}  # type: ignore[arg-type]

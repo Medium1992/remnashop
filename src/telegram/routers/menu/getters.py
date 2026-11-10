@@ -242,7 +242,7 @@ async def invite_getter(
         "referral_url": referral_url,
         "withdraw": support_url,
         "referral_reset_enabled": int(settings.extra.referral_reset.enabled),
-        **await s_invite_extra(invite_links, user),
+        **await s_invite_extra(invite_links, user, i18n),
     }
 
 

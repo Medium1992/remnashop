@@ -41,6 +41,18 @@ from .handlers import (
     on_target_input,
     on_toggle,
 )
+from .texts import (
+    on_text_default,
+    on_text_input,
+    on_text_reset,
+    on_text_save,
+    on_text_search,
+    on_text_select,
+    on_texts_changed,
+    text_list_getter,
+    text_view_getter,
+    texts_getter,
+)
 
 
 def _toggle(widget_id: str) -> Button:
@@ -111,6 +123,7 @@ main = Window(
     ),
     Row(_toggle("plans_calendar")),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
+    Row(SwitchTo(I18nFormat("btn-s.texts"), id="texts", state=SDashboard.TEXTS)),
     Row(
         SwitchTo(
             I18nFormat("btn-s.routers", value=F["routers_count"]),
@@ -328,6 +341,88 @@ confirm_send = Window(
     getter=s_getter,
 )
 
+texts = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.texts"),
+    Row(
+        Button(
+            I18nFormat("btn-s.texts-changed", count=F["texts_changed"]),
+            id="texts_changed",
+            on_click=on_texts_changed,
+        )
+    ),
+    _back(),
+    MessageInput(func=on_text_search),
+    IgnoreUpdate(),
+    state=SDashboard.TEXTS,
+    getter=texts_getter,
+)
+
+text_list = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-dashboard.text-list"),
+    ScrollingGroup(
+        Select(
+            Format("{item[mark]} {item[snippet]}"),
+            id="text_select",
+            item_id_getter=lambda item: item["id"],
+            items="texts",
+            on_click=on_text_select,
+        ),
+        id="text_scroll",
+        width=1,
+        height=8,
+        hide_on_single_page=True,
+    ),
+    _back(SDashboard.TEXTS),
+    MessageInput(func=on_text_search),
+    IgnoreUpdate(),
+    state=SDashboard.TEXT_LIST,
+    getter=text_list_getter,
+)
+
+# No banner on the two below: a long text would not fit a photo caption.
+text_view = Window(
+    I18nFormat("msg-s-dashboard.text-view"),
+    Row(
+        Button(
+            I18nFormat("btn-s.text-default"),
+            id="text_default",
+            on_click=on_text_default,
+            when=F["text_changed"],
+        ),
+        Button(
+            I18nFormat("btn-s.text-reset"),
+            id="text_reset",
+            on_click=on_text_reset,
+            when=F["text_changed"],
+            style=Style(ButtonStyle.DANGER),
+        ),
+    ),
+    _back(SDashboard.TEXT_LIST),
+    MessageInput(func=on_text_input),
+    IgnoreUpdate(),
+    state=SDashboard.TEXT_VIEW,
+    getter=text_view_getter,
+)
+
+text_confirm = Window(
+    I18nFormat("msg-s-dashboard.text-confirm"),
+    Row(
+        Button(
+            I18nFormat("btn-s.text-save"),
+            id="text_save",
+            on_click=on_text_save,
+            style=Style(ButtonStyle.SUCCESS),
+        )
+    ),
+    _back(SDashboard.TEXT_VIEW),
+    MessageInput(func=on_text_input),
+    IgnoreUpdate(),
+    state=SDashboard.TEXT_CONFIRM,
+    getter=text_view_getter,
+)
+
 router = Dialog(
     main,
     slots,
@@ -342,4 +437,8 @@ router = Dialog(
     number,
     target,
     confirm_send,
+    texts,
+    text_list,
+    text_view,
+    text_confirm,
 )

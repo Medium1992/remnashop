@@ -12,6 +12,7 @@ from src.infrastructure.services.s.jobs import DeviceJobs
 from src.infrastructure.services.s.reminders import DeviceReminders
 from src.infrastructure.services.s.remnawave import SRemnawave
 from src.infrastructure.services.s.slots import SlotService
+from src.infrastructure.services.s.texts import TextOverrides
 
 
 class SProvider(Provider):
@@ -36,5 +37,6 @@ class SProvider(Provider):
     block_dao = provide(source=UserBlockDao)
     blocks = provide(source=BlockService)
     invites = provide(source=InviteLinks)
+    texts = provide(source=TextOverrides, scope=Scope.APP)
 
     use_cases = provide_all(*S_USE_CASES)

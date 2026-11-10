@@ -11,7 +11,7 @@ from src.application.dto import UserDto
 from src.core.config import AppConfig
 from src.core.constants import USER_KEY
 from src.infrastructure.services import TranslatorHubImpl
-from src.infrastructure.services.i18n import LayeredFileStorage
+from src.infrastructure.services.s.texts import SLayeredFileStorage
 
 
 class I18nProvider(Provider):
@@ -23,7 +23,8 @@ class I18nProvider(Provider):
         config: AppConfig,
         retort: Retort,
     ) -> AnyOf[TranslatorHubProtocol, TranslatorHubImpl]:
-        storage = LayeredFileStorage(
+        # s edition: custom.ftl merged into the built-in texts, re-read on change.
+        storage = SLayeredFileStorage(
             user_translations_dir=config.translations_dir,
             default_translations_dir=config.default_translations_dir,
         )

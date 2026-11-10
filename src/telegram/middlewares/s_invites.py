@@ -26,6 +26,7 @@ from src.application.common.dao import SettingsDao, UserDao
 from src.application.dto import TempUserDto
 from src.core.constants import CONTAINER_KEY
 from src.core.enums import AccessMode, MiddlewareEventType
+from src.core.utils.s_invited import INVITED_BY_LINK
 from src.infrastructure.services.s.invites import InviteLinks, is_token
 
 from ._codes import parse_referral_code
@@ -65,9 +66,16 @@ class SInviteMiddleware(EventTypedMiddleware):
                 await self._peek(raw, data)
             return await handler(event, data)
 
-        if await self._spend(aiogram_user, data):
+        spent = await self._spend(aiogram_user, data)
+        if spent is None:
+            return None
+        if not spent:
             return await handler(event, data)
-        return None
+        marker = INVITED_BY_LINK.set(True)
+        try:
+            return await handler(event, data)
+        finally:
+            INVITED_BY_LINK.reset(marker)
 
     async def _peek(self, raw: str, data: dict[str, Any]) -> None:
         container: AsyncContainer = data[CONTAINER_KEY]
@@ -86,17 +94,18 @@ class SInviteMiddleware(EventTypedMiddleware):
         data[_DEAD_KEY] = True
         logger.info(f"Invite link '{raw}' is not a live one-time link")
 
-    async def _spend(self, aiogram_user: AiogramUser, data: dict[str, Any]) -> bool:
-        """Spend the token for a new user; False stops the update."""
+    async def _spend(self, aiogram_user: AiogramUser, data: dict[str, Any]) -> Optional[bool]:
+        """Spend the token for a new user: True when spent, False when there is
+        nothing to spend, None to stop the update."""
         token: Optional[str] = data.get(_TOKEN_KEY)
         dead: bool = data.get(_DEAD_KEY, False)
         if not token and not dead:
-            return True
+            return False
 
         container: AsyncContainer = data[CONTAINER_KEY]
         user_dao = await container.get(UserDao)
         if await user_dao.get_by_telegram_id(aiogram_user.id):
-            return True
+            return False
 
         if token:
             invites = await container.get(InviteLinks)
@@ -115,4 +124,4 @@ class SInviteMiddleware(EventTypedMiddleware):
         settings = await settings_dao.get()
         # Invite-only bot: without a live link there is no way in. A dead link
         # was already turned away by the access check; this is the lost race.
-        return settings.access.mode != AccessMode.INVITED
+        return None if settings.access.mode == AccessMode.INVITED else False

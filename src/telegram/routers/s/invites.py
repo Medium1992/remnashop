@@ -13,27 +13,40 @@ from aiogram_dialog.widgets.kbd import Button
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 
-from src.application.common import Notifier
+from src.application.common import Notifier, TranslatorRunner
 from src.application.dto import MessagePayloadDto, TelegramUserDto, UserDto
 from src.core.constants import USER_KEY
 from src.infrastructure.services.s.invites import InviteLinks
 
 
-async def invite_extra(invites: InviteLinks, user: UserDto) -> dict[str, Any]:
+async def invite_extra(
+    invites: InviteLinks, user: UserDto, i18n: TranslatorRunner
+) -> dict[str, Any]:
     settings = await invites.settings()
     if not settings.enabled:
         return {"s_invite": 0}
 
-    link = await invites.current(user)
-    active = len(await invites.live(user.id))
+    await invites.current(user)  # issues one when none is left
+    alive = await invites.live(user.id)
+    now = invites.clock()
+    # Newest first: the one the "copy" button gives.
+    lines = [
+        i18n.get(
+            "msg-s-invite.link",
+            n=number,
+            url=await invites.url(link),
+            # A string: a number would come out of Fluent with digit grouping.
+            until=str(int(link.expires_at)),
+            hours=link.hours_left(now),
+        )
+        for number, link in enumerate(reversed(alive), start=1)
+    ]
     return {
         "s_invite": 1,
-        "s_invite_hours": link.hours_left(invites.clock()),
-        # A string: a number would come out of Fluent with digit grouping.
-        "s_invite_until": str(int(link.expires_at)),
-        "s_invite_active": active,
+        "s_invite_links": "\n".join(lines),
+        "s_invite_active": len(alive),
         "s_invite_max": settings.max_active,
-        "s_invite_can_add": int(active < settings.max_active),
+        "s_invite_can_add": int(len(alive) < settings.max_active),
     }
 
 

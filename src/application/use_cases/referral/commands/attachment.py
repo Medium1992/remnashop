@@ -9,6 +9,7 @@ from src.application.common.uow import UnitOfWork
 from src.application.dto import ReferralDto, UserDto
 from src.application.events import ReferralAttachedEvent
 from src.core.enums import ReferralLevel
+from src.core.utils.s_invited import INVITED_BY_LINK
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,8 @@ class AttachReferral(Interactor[AttachReferralDto, Optional[UserDto]]):
 
     async def _execute(self, actor: UserDto, data: AttachReferralDto) -> Optional[UserDto]:
         settings = await self.settings_dao.get()
-        if not settings.referral.enable:
+        # s edition: a one-time invite link records who invited whom regardless.
+        if not settings.referral.enable and not INVITED_BY_LINK.get():
             logger.info("Referral skipped: referral system is disabled")
             return None
 
