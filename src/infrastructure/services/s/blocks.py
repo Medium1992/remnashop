@@ -53,14 +53,14 @@ class BlockService:
         return await self.block_dao.all()
 
     @staticmethod
-    def _allow(actor: UserDto) -> None:
+    def ensure_allowed(actor: UserDto) -> None:
         if not PermissionPolicy.has_permission(actor, Permission.USER_SUBSCRIPTION_EDITOR):
             raise PermissionDeniedError()
 
     async def block(
         self, actor: UserDto, user_id: int, hours: Optional[int], reason: str = ""
     ) -> UserBlockDto:
-        self._allow(actor)
+        self.ensure_allowed(actor)
         user = await self.user_dao.get_by_id(user_id)
         if not user:
             raise ValueError(f"User '{user_id}' not found")
@@ -92,7 +92,7 @@ class BlockService:
 
     async def unblock(self, actor: UserDto, user_id: int) -> bool:
         """Lift a block. False when there was none."""
-        self._allow(actor)
+        self.ensure_allowed(actor)
         user = await self.user_dao.get_by_id(user_id)
         block = await self.block_dao.get(user_id)
         if not user or not block:

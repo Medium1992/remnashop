@@ -57,17 +57,19 @@ async def on_block_button(
         await callback.answer()
         return
 
+    # The button can be forged: the block dialog shows who the target is, so
+    # it opens only for those who could block.
+    try:
+        blocks.ensure_allowed(user)
+    except PermissionDeniedError:
+        logger.warning(f"{user.log} tried to block '{user_id}' without the permission")
+        await callback.answer()
+        return
+
     if action == MENU:
         await dialog_manager.start(SBlock.MAIN, data={TARGET: user_id}, mode=StartMode.RESET_STACK)
         await callback.answer()
         return
 
-    try:
-        await blocks.block(
-            user, user_id, int(action), reason=i18n.get("msg-s-block.torrent-reason")
-        )
-    except PermissionDeniedError:
-        logger.warning(f"{user.log} tried to block '{user_id}' without the permission")
-        await callback.answer()
-        return
+    await blocks.block(user, user_id, int(action), reason=i18n.get("msg-s-block.torrent-reason"))
     await callback.answer(i18n.get("ntf-s-blocks.done"), show_alert=False)

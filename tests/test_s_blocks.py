@@ -6,14 +6,15 @@ from typing import Any, Dict, List, Optional
 import pytest
 from test_service_end_to_end import a_subscription
 
+from src.application.common import TranslatorRunner
 from src.application.common.interactor import SYSTEM_ACTOR
-from src.application.dto import UserDto
+from src.application.dto import TelegramUserDto, UserDto
 from src.application.dto.s_blocks import UserBlockDto
 from src.core.enums import Role, SubscriptionStatus
 from src.core.exceptions import PermissionDeniedError
 from src.core.utils.time import datetime_now
 from src.infrastructure.services.s.blocks import BlockService
-from src.telegram.routers.s.block.handlers import torrent_report_keyboard
+from src.telegram.routers.s.block.handlers import on_block_button, torrent_report_keyboard
 
 
 class FakeUow:
@@ -181,3 +182,58 @@ class TestTorrentReportButtons:
 
     def test_no_user_no_buttons(self) -> None:
         assert torrent_report_keyboard(None) is None
+
+
+class _Container:
+    def __init__(self, service: BlockService) -> None:
+        self.objects: Dict[Any, Any] = {BlockService: service, TranslatorRunner: _I18n()}
+
+    async def get(self, dependency_type: Any, component: Any = None) -> Any:
+        return self.objects[dependency_type]
+
+
+class _I18n:
+    def get(self, key: str, **kwargs: Any) -> str:
+        return key
+
+
+class _Callback:
+    def __init__(self, data: str) -> None:
+        self.data = data
+
+    async def answer(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+
+class _DialogManager:
+    def __init__(self, container: _Container) -> None:
+        self.started: List[Any] = []
+        self.middleware_data = {"dishka_container": container}
+
+    async def start(self, state: Any, **kwargs: Any) -> None:
+        self.started.append(state)
+
+
+class TestForgedBlockButtons:
+    """The buttons sit under an admin alert, but their data can be sent by anyone."""
+
+    async def _press(self, data: str, role: Role) -> tuple[Any, _DialogManager]:
+        service, dao, *_ = build()
+        manager = _DialogManager(_Container(service))
+        user = TelegramUserDto(id=2, telegram_id=2, name="U", role=role)
+        await on_block_button(_Callback(data), manager, user=user)  # type: ignore[arg-type,call-arg]
+        return dao, manager
+
+    async def test_a_user_does_not_get_the_block_dialog(self) -> None:
+        _, manager = await self._press("s_block:7:menu", Role.USER)
+        assert manager.started == []
+
+    async def test_a_user_does_not_block(self) -> None:
+        dao, _ = await self._press("s_block:7:24", Role.USER)
+        assert dao.rows == {}
+
+    async def test_an_admin_gets_both(self) -> None:
+        _, manager = await self._press("s_block:7:menu", Role.ADMIN)
+        assert len(manager.started) == 1
+        dao, _ = await self._press("s_block:7:24", Role.ADMIN)
+        assert 7 in dao.rows
