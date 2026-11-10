@@ -41,6 +41,7 @@ TOGGLES = {
     "inactive_enabled": "inactive.enabled",
     "inactive_include_disabled": "inactive.include_disabled",
     "invites_enabled": "invites.enabled",
+    "plans_calendar": "plans.calendar_months",
 }
 
 # Button id -> (number setting, window to come back to).

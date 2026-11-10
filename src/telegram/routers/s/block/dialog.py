@@ -2,10 +2,12 @@
 
 from typing import Any
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import CallbackQuery, Message
 from aiogram_dialog import Dialog, DialogManager, ShowMode, StartMode
 from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.kbd import Button
+from aiogram_dialog.widgets.style import Style
 from dishka import FromDishka
 from dishka.integrations.aiogram_dialog import inject
 from magic_filter import F
@@ -14,7 +16,7 @@ from src.application.common.dao import UserDao
 from src.application.dto import TelegramUserDto
 from src.core.constants import TARGET_USER_ID, USER_KEY
 from src.core.enums import BannerName
-from src.infrastructure.services.s.blocks import DURATIONS_HOURS, UNTIL_FORMAT, BlockService
+from src.infrastructure.services.s.blocks import DURATIONS_HOURS, BlockService, local_until
 from src.telegram.s_states import SBlock
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import Cancel, Row
@@ -54,7 +56,7 @@ async def block_getter(
         "name": target.name if target else "?",
         "telegram_id": (target.telegram_id if target else None) or 0,
         "blocked": int(block is not None),
-        "until": block.until.strftime(UNTIL_FORMAT) if block and block.until else "none",
+        "until": local_until(block.until) if block and block.until else "none",
         "reason": (block.reason if block else dialog_manager.dialog_data.get(REASON, "")) or "none",
     }
 
@@ -91,7 +93,10 @@ async def on_reason(message: Message, widget: MessageInput, dialog_manager: Dial
 
 def _duration(hours: int) -> Button:
     return Button(
-        I18nFormat("btn-s-block.duration", value=hours), id=f"h{hours}", on_click=on_duration
+        I18nFormat("btn-s-block.duration", value=hours),
+        id=f"h{hours}",
+        on_click=on_duration,
+        style=Style(ButtonStyle.DANGER),
     )
 
 
@@ -103,7 +108,11 @@ main = Window(
     Row(_duration(0)),
     Row(
         Button(
-            I18nFormat("btn-s-block.unblock"), id="unblock", on_click=on_unblock, when=F["blocked"]
+            I18nFormat("btn-s-block.unblock"),
+            id="unblock",
+            on_click=on_unblock,
+            when=F["blocked"],
+            style=Style(ButtonStyle.SUCCESS),
         )
     ),
     Row(Cancel(I18nFormat("btn-back.general"), id="back")),

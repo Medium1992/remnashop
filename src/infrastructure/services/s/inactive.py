@@ -29,6 +29,7 @@ from src.application.dto.s_settings import InactiveCleanupSettingsDto
 from src.application.events.user import SubscriptionExpiredEvent
 from src.application.use_cases.subscription.commands.management import DeleteSubscription
 from src.core.enums import SubscriptionStatus
+from src.core.utils.s_time import DATE, tg_time
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.database.models import Subscription, User
@@ -42,6 +43,11 @@ from .remnawave import SRemnawave
 PANEL_CONCURRENCY = 5
 LIST_TTL_SECONDS = 600
 DATE_FORMAT = "%d.%m.%Y"
+
+
+def local_date(moment: datetime) -> str:
+    """A deletion date for a message: in the reader's format, plain for old clients."""
+    return tg_time(moment, DATE, moment.strftime(DATE_FORMAT))
 
 
 @dataclass(frozen=True)
@@ -201,7 +207,7 @@ class InactiveProfiles:
             item.user,
             MessagePayloadDto(
                 i18n_key="ntf-s-inactive.warning",
-                i18n_kwargs={"date": delete_on.strftime(DATE_FORMAT), "value": settings.warn_days},
+                i18n_kwargs={"date": local_date(delete_on), "value": settings.warn_days},
                 reply_markup=get_renew_keyboard(),
                 disable_default_markup=False,
                 delete_after=None,
@@ -250,7 +256,7 @@ class InactiveProfiles:
             MessagePayloadDto(
                 i18n_key="ntf-s-inactive.policy",
                 i18n_kwargs={
-                    "date": delete_on.strftime(DATE_FORMAT),
+                    "date": local_date(delete_on),
                     "value": settings.delete_after_days,
                 },
                 disable_default_markup=False,

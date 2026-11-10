@@ -29,6 +29,8 @@ async def invite_extra(invites: InviteLinks, user: UserDto) -> dict[str, Any]:
     return {
         "s_invite": 1,
         "s_invite_hours": link.hours_left(invites.clock()),
+        # A string: a number would come out of Fluent with digit grouping.
+        "s_invite_until": str(int(link.expires_at)),
         "s_invite_active": active,
         "s_invite_max": settings.max_active,
         "s_invite_can_add": int(active < settings.max_active),

@@ -29,7 +29,7 @@ from src.core.utils.client_versions import (
     merge_sources,
     parse_client,
 )
-from src.infrastructure.services.s.blocks import UNTIL_FORMAT, BlockService
+from src.infrastructure.services.s.blocks import BlockService, local_until
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import is_router
 from src.infrastructure.services.s.reminders import device_title, subscription_age
@@ -90,7 +90,7 @@ async def devices_extra(
 def block_banner(i18n: TranslatorRunner, block: UserBlockDto) -> str:
     return i18n.get(
         "msg-s-block.banner",
-        until=block.until.strftime(UNTIL_FORMAT) if block.until else "none",
+        until=local_until(block.until) if block.until else "none",
         reason=block.reason or "none",
     )
 

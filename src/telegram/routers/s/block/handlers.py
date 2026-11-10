@@ -3,6 +3,7 @@
 from typing import Optional
 
 from aiogram import F, Router
+from aiogram.enums import ButtonStyle
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram_dialog import DialogManager, StartMode
@@ -34,7 +35,9 @@ def torrent_report_keyboard(user_id: Optional[int]) -> Optional[InlineKeyboardMa
     builder = InlineKeyboardBuilder.from_markup(card)
     builder.row(
         InlineKeyboardButton(
-            text="btn-s-block.quick", callback_data=f"{PREFIX}{user_id}:{QUICK_HOURS}"
+            text="btn-s-block.quick",
+            callback_data=f"{PREFIX}{user_id}:{QUICK_HOURS}",
+            style=ButtonStyle.DANGER,
         ),
         InlineKeyboardButton(text="btn-s-block.other", callback_data=f"{PREFIX}{user_id}:{MENU}"),
     )

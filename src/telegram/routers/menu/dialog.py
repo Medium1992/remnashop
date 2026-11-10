@@ -26,6 +26,7 @@ from src.telegram.widgets.kbd import (
     Url,
     WebApp,
 )
+from src.telegram.widgets.s_disabled import SDisabled
 from src.telegram.window import Window
 
 from .getters import (
@@ -177,6 +178,7 @@ devices = Window(
             id="s_add_slot",
             on_click=s_on_add_slot,
             when=F["s_slot_button"],
+            style=Style(ButtonStyle.SUCCESS),
         ),
     ),
     Row(
@@ -274,6 +276,12 @@ invite = Window(
             id="s_invite_new",
             on_click=s_on_new_invite,
             when=F["s_invite_can_add"],
+            style=Style(ButtonStyle.PRIMARY),
+        ),
+        SDisabled(
+            I18nFormat("btn-s-invite.limit"),
+            id="s_invite_limit",
+            when=F["s_invite"] & ~F["s_invite_can_add"],
         ),
     ),
     Row(

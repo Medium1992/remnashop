@@ -13,7 +13,7 @@ from src.application.dto import SubscriptionDto
 from src.core.enums import SubscriptionStatus
 from src.core.utils.time import datetime_now
 from src.infrastructure.services.s.blocks import BlockService
-from src.infrastructure.services.s.inactive import DATE_FORMAT, inactive_since
+from src.infrastructure.services.s.inactive import inactive_since, local_date
 
 from .devices import block_banner
 
@@ -40,7 +40,5 @@ async def subscription_extra(
         return extra
     i18n: TranslatorRunner = await container.get(TranslatorRunner)
     delete_on = since + timedelta(days=settings.delete_after_days)
-    extra["s_inactive"] = i18n.get(
-        "msg-s-subscription.inactive", date=delete_on.strftime(DATE_FORMAT)
-    )
+    extra["s_inactive"] = i18n.get("msg-s-subscription.inactive", date=local_date(delete_on))
     return extra

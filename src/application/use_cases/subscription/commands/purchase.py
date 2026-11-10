@@ -5,7 +5,7 @@ from typing import Optional
 from loguru import logger
 
 from src.application.common import EventPublisher, Interactor, Remnawave
-from src.application.common.dao import SubscriptionDao, UserDao
+from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, TransactionDto, UserDto
 from src.application.events import TrialActivatedEvent
@@ -19,6 +19,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.remna_id import remna_key
+from src.core.utils.s_calendar import add_term
 from src.core.utils.time import datetime_now
 
 
@@ -114,11 +115,13 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
         user_dao: UserDao,
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
+        settings_dao: SettingsDao,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
+        self.settings_dao = settings_dao
 
     async def _execute(self, actor: UserDto, data: PurchaseSubscriptionDto) -> None:  # noqa: C901
         user = data.user
@@ -168,6 +171,9 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                 else:
                     base_date = max(subscription.expire_at, datetime_now())
                     new_expire = base_date + timedelta(days=duration)
+                    # s edition: a month of the plan ends on the same day next month.
+                    if (await self.settings_dao.get()).extra.s.plans.calendar_months:
+                        new_expire = add_term(base_date, duration)
 
                 subscription.expire_at = new_expire
                 subscription.device_limit = plan.device_limit

@@ -39,6 +39,7 @@ TOGGLE_FIELDS: Final[frozenset[str]] = frozenset(
         "inactive.include_disabled",
         "chat_access.enabled",
         "invites.enabled",
+        "plans.calendar_months",
     }
 )
 

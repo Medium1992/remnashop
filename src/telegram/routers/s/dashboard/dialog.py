@@ -1,5 +1,7 @@
+from aiogram.enums import ButtonStyle
 from aiogram_dialog import Dialog, StartMode
 from aiogram_dialog.widgets.input import MessageInput
+from aiogram_dialog.widgets.style import Style
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
@@ -107,6 +109,7 @@ main = Window(
             state=SDashboard.INVITES,
         )
     ),
+    Row(_toggle("plans_calendar")),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(
         SwitchTo(
@@ -173,7 +176,14 @@ channel = Window(
         ),
         Button(I18nFormat("btn-s.channel-check"), id="channel_check", on_click=on_channel_check),
     ),
-    Row(Button(I18nFormat("btn-s.channel-reset"), id="channel_reset", on_click=on_channel_reset)),
+    Row(
+        Button(
+            I18nFormat("btn-s.channel-reset"),
+            id="channel_reset",
+            on_click=on_channel_reset,
+            style=Style(ButtonStyle.DANGER),
+        )
+    ),
     _back(SDashboard.VERSIONS),
     MessageInput(func=on_channel_input),
     IgnoreUpdate(),
@@ -304,7 +314,14 @@ target = Window(
 confirm_send = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-dashboard.confirm-send"),
-    Row(Button(I18nFormat("btn-s.send-confirm"), id="send_confirm", on_click=on_send_confirm)),
+    Row(
+        Button(
+            I18nFormat("btn-s.send-confirm"),
+            id="send_confirm",
+            on_click=on_send_confirm,
+            style=Style(ButtonStyle.SUCCESS),
+        )
+    ),
     Row(Button(I18nFormat("btn-back.general"), id="back", on_click=on_back_to_kind)),
     IgnoreUpdate(),
     state=SDashboard.CONFIRM_SEND,

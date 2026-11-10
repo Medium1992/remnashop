@@ -124,7 +124,9 @@ class TestBlock:
         assert dao.rows[7].reason == "торренты"
         assert block.until is not None
         assert notifier.sent[0].i18n_key == "ntf-s-blocks.blocked"
-        assert notifier.sent[0].i18n_kwargs["until"].endswith("UTC")
+        until = notifier.sent[0].i18n_kwargs["until"]
+        assert until.startswith(f'<tg-time unix="{int(block.until.timestamp())}" format="Dt">')
+        assert until.endswith(" UTC</tg-time>")
 
     async def test_without_hours_it_lasts_until_lifted(self) -> None:
         service, dao, *_ = build()

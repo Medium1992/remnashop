@@ -7,7 +7,7 @@ renewing during a block does not lift it -- the panel client keeps a blocked
 user DISABLED on every write.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from loguru import logger
@@ -20,12 +20,20 @@ from src.application.dto import MessagePayloadDto, UserDto
 from src.application.dto.s_blocks import UserBlockDto
 from src.core.enums import SubscriptionStatus
 from src.core.exceptions import PermissionDeniedError
+from src.core.utils.s_time import DATE_TIME, tg_time
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
 
 from .remnawave import SRemnawave
 
 UNTIL_FORMAT = "%d.%m.%Y %H:%M UTC"
+
+
+def local_until(until: datetime) -> str:
+    """The end of a block for a message: in the reader's time, UTC for old clients."""
+    return tg_time(until, DATE_TIME, until.strftime(UNTIL_FORMAT))
+
+
 DURATIONS_HOURS = (1, 6, 24, 24 * 7)
 
 
@@ -134,7 +142,7 @@ class BlockService:
                     i18n_key=key,
                     i18n_kwargs={
                         "reason": block.reason or "none",
-                        "until": block.until.strftime(UNTIL_FORMAT) if block.until else "none",
+                        "until": local_until(block.until) if block.until else "none",
                     },
                     disable_default_markup=False,
                     delete_after=None,

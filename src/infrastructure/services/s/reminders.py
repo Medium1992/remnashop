@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Callable, Optional, Sequence, TypeVar
 
+from aiogram.enums import ButtonStyle
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger
@@ -155,6 +156,7 @@ def devices_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(
             text="btn-s-reminder.devices",
             callback_data=f"{GOTO_PREFIX}{MainMenu.DEVICES.state}",
+            style=ButtonStyle.PRIMARY,
         )
     )
     return builder.as_markup()

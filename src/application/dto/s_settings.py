@@ -76,6 +76,17 @@ class InviteLinksSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class PlanTermsSettingsDto(TrackableMixin):
+    """How a plan's duration turns into an expiry date.
+
+    With ``calendar_months`` a duration named in months or years (a multiple
+    of 30 or 365 days) ends on the same day that many months later.
+    """
+
+    calendar_months: bool = False
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
@@ -83,6 +94,7 @@ class SSettingsDto(TrackableMixin):
     inactive: InactiveCleanupSettingsDto = field(default_factory=InactiveCleanupSettingsDto)
     chat_access: ChatAccessSettingsDto = field(default_factory=ChatAccessSettingsDto)
     invites: InviteLinksSettingsDto = field(default_factory=InviteLinksSettingsDto)
+    plans: PlanTermsSettingsDto = field(default_factory=PlanTermsSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

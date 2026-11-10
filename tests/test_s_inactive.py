@@ -222,7 +222,12 @@ class TestSubscriptionScreen:
 
         extra = await self._extra(sub, delete_after_days=30)
 
-        expected = (since + timedelta(days=30)).strftime("%d.%m.%Y")
+        delete_on = since + timedelta(days=30)
+        # Telegram shows the date in the reader's format; old clients see the plain one.
+        expected = (
+            f'<tg-time unix="{int(delete_on.timestamp())}" format="D">'
+            f"{delete_on.strftime('%d.%m.%Y')}</tg-time>"
+        )
         assert extra["s_inactive"] == f"msg-s-subscription.inactive:{expected}"
 
     async def test_an_active_one_shows_nothing(self) -> None:
