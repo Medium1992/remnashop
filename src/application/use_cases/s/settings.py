@@ -175,3 +175,24 @@ class UpdateRouterHwids(Interactor[str, list[str]]):
 
         logger.info(f"{actor.log} Router HWIDs set: {len(hwids)}")
         return hwids
+
+
+class SetRulesText(Interactor[str, str]):
+    """Rules as text shown in Telegram; "-" goes back to the link."""
+
+    required_permission = Permission.SETTINGS_REQUIREMENT
+
+    def __init__(self, uow: UnitOfWork, settings_dao: SettingsDao) -> None:
+        self.uow = uow
+        self.settings_dao = settings_dao
+
+    async def _execute(self, actor: UserDto, html: str) -> str:
+        text = "" if html.strip() == "-" else html.strip()
+        async with self.uow:
+            settings = await self.settings_dao.get()
+            settings.extra.s.rules.text = text
+            await self.settings_dao.update(settings)
+            await self.uow.commit()
+
+        logger.info(f"{actor.log} Rules text {'set' if text else 'cleared'} ({len(text)} chars)")
+        return text

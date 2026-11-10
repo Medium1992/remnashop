@@ -10,6 +10,7 @@ from src.application.common.dao import SettingsDao
 from src.application.dto import MessagePayloadDto, TelegramUserDto
 from src.core.enums import Command
 from src.telegram.keyboards import get_contact_support_keyboard
+from src.telegram.s_rules import rules_payload, rules_text
 
 router = Router(name=__name__)
 
@@ -48,6 +49,12 @@ async def on_rules_command(
     logger.info(f"{user.log} Called '/rules' command")
 
     settings = await settings_dao.get()
+    # s edition: the rules themselves when the admin wrote them.
+    if rules_text(settings):
+        await notifier.notify_user(
+            user=user, payload=rules_payload(rules_text(settings), accept=False)
+        )
+        return
     await notifier.notify_user(
         user=user,
         payload=MessagePayloadDto(

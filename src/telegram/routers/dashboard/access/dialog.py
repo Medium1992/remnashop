@@ -111,6 +111,7 @@ conditions = Window(
 rules = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-access-rules"),
+    I18nFormat("msg-s-rules.admin"),
     Row(
         SwitchTo(
             I18nFormat("btn-back.general"),

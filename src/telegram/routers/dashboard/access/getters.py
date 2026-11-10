@@ -50,6 +50,8 @@ async def rules_getter(
 
     return {
         "rules_url": settings.requirements.rules_url,
+        # s edition: rules as text in Telegram.
+        "s_rules_text": int(bool(settings.extra.s.rules.text)),
     }
 
 

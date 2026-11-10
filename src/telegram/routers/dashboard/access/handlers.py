@@ -20,6 +20,7 @@ from src.application.use_cases.settings.commands.requirements import (
 )
 from src.core.constants import USER_KEY
 from src.core.enums import AccessMode, AccessRequirements
+from src.telegram.routers.s.rules import is_rules_text, on_rules_text_input
 from src.telegram.states import DashboardAccess
 
 
@@ -80,6 +81,11 @@ async def on_rules_input(
     dialog_manager: DialogManager,
     update_rules_requirement: FromDishka[UpdateRulesRequirement],
 ) -> None:
+    # s edition: anything but a link is the rules text itself.
+    if is_rules_text(message):
+        await on_rules_text_input(message, dialog_manager)
+        return
+
     dialog_manager.show_mode = ShowMode.EDIT
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
 

@@ -87,6 +87,17 @@ class PlanTermsSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class RulesTextSettingsDto(TrackableMixin):
+    """The rules themselves, shown in Telegram instead of a link.
+
+    HTML as Telegram formats it (``Message.html_text``); empty means upstream's
+    link is used.
+    """
+
+    text: str = ""
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
@@ -95,6 +106,7 @@ class SSettingsDto(TrackableMixin):
     chat_access: ChatAccessSettingsDto = field(default_factory=ChatAccessSettingsDto)
     invites: InviteLinksSettingsDto = field(default_factory=InviteLinksSettingsDto)
     plans: PlanTermsSettingsDto = field(default_factory=PlanTermsSettingsDto)
+    rules: RulesTextSettingsDto = field(default_factory=RulesTextSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

@@ -12,6 +12,7 @@ from src.telegram.keyboards import build_buttons_row, connect_buttons
 from src.telegram.routers.dashboard.handlers import on_smart_search
 from src.telegram.routers.s.devices import on_add_slot as s_on_add_slot
 from src.telegram.routers.s.invites import on_new_invite as s_on_new_invite
+from src.telegram.routers.s.rules import on_show_rules as s_on_show_rules
 from src.telegram.states import Dashboard, MainMenu, Subscription
 from src.telegram.utils import require_permission
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -117,6 +118,14 @@ menu = Window(
             text=I18nFormat("btn-menu.support"),
             id="support",
             url=Format("{support_url}"),
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-s-rules.menu"),
+            id="s_rules",
+            on_click=s_on_show_rules,
+            when=F["s_rules"],
         ),
     ),
     Row(

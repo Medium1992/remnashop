@@ -4,12 +4,14 @@ from aiogram.types import CallbackQuery, TelegramObject
 from dishka import AsyncContainer
 
 from src.application.common import Notifier
+from src.application.common.dao import SettingsDao
 from src.application.dto import MessagePayloadDto, TelegramUserDto
 from src.application.use_cases.access.commands.validation import AcceptRules
 from src.application.use_cases.access.queries.requirements import CheckRules
 from src.core.constants import CONTAINER_KEY, USER_KEY
 from src.core.enums import MiddlewareEventType
 from src.telegram.keyboards import CALLBACK_RULES_ACCEPT, get_rules_keyboard
+from src.telegram.s_rules import rules_payload, rules_text
 
 from .base import EventTypedMiddleware
 
@@ -41,6 +43,14 @@ class RulesMiddleware(EventTypedMiddleware):
             return await handler(event, data)
 
         if not result.is_accepted:
+            # s edition: the rules themselves when the admin wrote them.
+            settings = await (await container.get(SettingsDao)).get()
+            if rules_text(settings):
+                payload = rules_payload(
+                    rules_text(settings), accept=True, reply_markup=get_rules_keyboard()
+                )
+                await notifier.notify_user(user=user, payload=payload)
+                return
             await notifier.notify_user(
                 user=user,
                 payload=MessagePayloadDto(
