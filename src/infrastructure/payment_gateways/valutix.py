@@ -40,7 +40,7 @@ class ValutixGateway(BasePaymentGateway):
         )
 
     async def handle_create_payment(self, amount: Decimal, details: str) -> PaymentResultDto:
-        payload = {
+        payload: dict[str, Any] = {
             "amount": str(amount),
             "externalId": str(uuid.uuid4()),
             "purpose": details[:255],
@@ -49,6 +49,8 @@ class ValutixGateway(BasePaymentGateway):
             "callbackUrl": self.config.get_webhook(self.data.type),
             "currency": self.data.currency.value,
         }
+        if self.data.settings.service_id is not None:  # type: ignore[union-attr]
+            payload["serviceId"] = self.data.settings.service_id  # type: ignore[union-attr]
         logger.debug(f"Creating Valutix payment payload: {payload}")
 
         try:
@@ -89,11 +91,11 @@ class ValutixGateway(BasePaymentGateway):
         match status:
             case "COMPLETED":
                 return payment_id, TransactionStatus.COMPLETED
-            case "CANCELED" | "FAILED" | "EXPIRED":
-                return payment_id, TransactionStatus.CANCELED
-            case "CHARGEBACK":
+            case "CHARGEBACK" | "REFUND":
                 return payment_id, TransactionStatus.REFUNDED
-            case "CREATED" | "PENDING":
+            # Not final: an order may still become COMPLETED after any of these,
+            # and a canceled transaction would not take that payment.
+            case "CREATED" | "PENDING" | "CANCELED" | "FAILED" | "EXPIRED" | "BLOCKED":
                 logger.debug(f"Valutix webhook status '{status}' — skipping")
                 return None
             case _:

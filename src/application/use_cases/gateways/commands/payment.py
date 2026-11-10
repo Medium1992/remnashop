@@ -220,6 +220,7 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
             plan_snapshot=data.plan_snapshot,
         )
 
+        gateway_instance.payer = actor
         async with self.uow:
             payment: PaymentResultDto = await gateway_instance.handle_create_payment(
                 amount=data.pricing.final_amount,
@@ -258,6 +259,7 @@ class CreateTestPayment(Interactor[PaymentGatewayType, PaymentResultDto]):
         test_pricing = PriceDetailsDto.test()
         test_plan_snapshot = PlanSnapshotDto.test()
 
+        gateway_instance.payer = actor
         payment: PaymentResultDto = await gateway_instance.handle_create_payment(
             amount=test_pricing.final_amount,
             details=i18n.get("test-payment"),

@@ -1,10 +1,11 @@
 import base64
 import hashlib
 import json
+import re
 import uuid
 from decimal import Decimal
 from hmac import compare_digest
-from typing import Any, Union
+from typing import Any, Iterator, Union
 from uuid import UUID
 
 import orjson
@@ -32,6 +33,9 @@ class CryptomusGateway(BasePaymentGateway):
     CURRENCY = Currency.USD
 
     NETWORKS = ["91.227.144.54"]
+
+    # `"sign":"…"` with its comma, wherever in the body it is.
+    _SIGN_FIELD = re.compile(r',\s*"sign"\s*:\s*"[0-9a-fA-F]*"|"sign"\s*:\s*"[0-9a-fA-F]*"\s*,?')
 
     def __init__(self, gateway: PaymentGatewayDto, bot: Bot, config: AppConfig) -> None:
         super().__init__(gateway, bot, config)
@@ -80,7 +84,7 @@ class CryptomusGateway(BasePaymentGateway):
         logger.debug(f"Received {self.__class__.__name__} webhook request")
         webhook_data = await self._get_webhook_data(request)
 
-        if not self._verify_webhook(request, webhook_data):
+        if not self._verify_webhook(request, webhook_data, await request.body()):
             raise PermissionError("Webhook verification failed")
 
         status = webhook_data.get("status")
@@ -94,13 +98,12 @@ class CryptomusGateway(BasePaymentGateway):
         match status:
             case "paid" | "paid_over":
                 transaction_status = TransactionStatus.COMPLETED
-            case "cancel":
+            case "cancel" | "fail" | "system_fail":
                 transaction_status = TransactionStatus.CANCELED
-            case "confirm_check":
-                logger.debug(
-                    f"Received confirm_check webhook for {self.__class__.__name__}, skipping"
-                )
+            case "confirm_check" | "check" | "process" | "wrong_amount_waiting":
+                logger.debug(f"Received {status} webhook for {self.__class__.__name__}, skipping")
                 return None
+            # wrong_amount, locked and refund_* stay errors: the admin has to look.
             case _:
                 raise ValueError(f"Unsupported status: {status}")
 
@@ -136,7 +139,7 @@ class CryptomusGateway(BasePaymentGateway):
 
         return PaymentResultDto(id=UUID(payment_id_str), url=str(payment_url))
 
-    def _verify_webhook(self, request: Request, data: dict) -> bool:
+    def _verify_webhook(self, request: Request, data: dict, raw_body: bytes) -> bool:
         ip = self._get_ip(request.headers)
 
         if not self._is_ip_trusted(ip):
@@ -147,11 +150,23 @@ class CryptomusGateway(BasePaymentGateway):
         if not sign:
             raise ValueError("Missing signature")
 
-        json_data = json.dumps(data, separators=(",", ":"))
-        hash_value = self._generate_signature(json_data)
+        for signed in self._signed_bodies(data, raw_body):
+            if compare_digest(self._generate_signature(signed), str(sign)):
+                return True
 
-        if not compare_digest(hash_value, sign):
-            logger.warning("Invalid signature")
-            return False
+        logger.warning("Invalid signature")
+        return False
 
-        return True
+    def _signed_bodies(self, data: dict, raw_body: bytes) -> Iterator[str]:
+        # The sign is md5 over the body as PHP's json_encode wrote it, without
+        # `sign`: slashes as `\/`, non-ASCII as is. The body as it came, minus
+        # the field, is that text exactly; the re-encodings cover a body whose
+        # bytes differ, and the last one is how it was checked before.
+        raw = raw_body.decode("utf-8", errors="replace")
+        unsigned, found = self._SIGN_FIELD.subn("", raw, count=1)
+        if found:
+            yield unsigned
+        for ensure_ascii in (False, True):
+            compact = json.dumps(data, separators=(",", ":"), ensure_ascii=ensure_ascii)
+            yield compact.replace("/", "\\/")
+        yield json.dumps(data, separators=(",", ":"))

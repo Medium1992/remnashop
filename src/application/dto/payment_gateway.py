@@ -164,6 +164,12 @@ class WataGatewaySettingsDto(GatewaySettingsDto):
 class ValutixGatewaySettingsDto(GatewaySettingsDto):
     type: Literal[PaymentGatewayType.VALUTIX] = PaymentGatewayType.VALUTIX
     api_key: Optional[SecretStr] = None
+    # Required by the API for accounts made after it was added, so optional here.
+    service_id: Optional[int] = None
+
+    @property
+    def is_configured(self) -> bool:
+        return self.api_key is not None
 
 
 AnyGatewaySettingsDto = Union[

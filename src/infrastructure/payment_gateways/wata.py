@@ -96,6 +96,10 @@ class WataGateway(BasePaymentGateway):
                 transaction_status = TransactionStatus.COMPLETED
             case "Declined":
                 transaction_status = TransactionStatus.CANCELED
+            case "Created" | "Pending":
+                # Sent before the bank answers; Paid or Declined follows.
+                logger.debug(f"WATA webhook status '{status}', skipping")
+                return None
             case _:
                 raise ValueError(f"Unsupported transactionStatus: {status}")
 
