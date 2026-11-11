@@ -22,6 +22,7 @@ from src.application.use_cases.plan.queries.match import MatchPlan, MatchPlanDto
 from src.application.use_cases.user.queries.plans import GetAvailablePlans
 from src.core.constants import PAYMENT_PREFIX, USER_KEY
 from src.core.enums import PaymentGatewayType, PurchaseType, TransactionStatus
+from src.telegram.routers.s import plan_change as s_plan_change
 from src.telegram.states import Subscription
 
 
@@ -91,6 +92,10 @@ async def _create_payment_and_get_data(
     transaction_plan = PlanSnapshotDto.from_plan(plan, duration.days)
     pricing = pricing_service.calculate_for_duration(
         user, duration, payment_gateway.currency, apply_discount=not plan.is_trial
+    )
+    # s edition: a change counts what is left of the current plan.
+    pricing = await s_plan_change.change_price(
+        dialog_manager, plan, duration.days, payment_gateway.currency, pricing
     )
 
     try:
@@ -259,6 +264,12 @@ async def on_subscription_plans(  # noqa: C901
             dialog_manager.dialog_data["selected_duration"] = plans[0].durations[0].days
             dialog_manager.dialog_data["only_single_duration"] = True
 
+            # s edition: a change asks its questions on the way to the payment.
+            if purchase_type == PurchaseType.CHANGE:
+                days = plans[0].durations[0].days
+                await on_duration_select(callback, widget, dialog_manager, days)  # type: ignore[no-untyped-call]
+                return
+
             if len(gateways) == 1:
                 logger.info(f"{user.log} Auto-selected payment method '{gateways[0].type}'")
                 dialog_manager.dialog_data["selected_payment_method"] = gateways[0].type
@@ -357,6 +368,9 @@ async def on_duration_select(
         logger.warning(f"{user.log} duration '{selected_duration}' missing (stale dialog data)")
         await dialog_manager.start(state=Subscription.MAIN)
         return
+    # s edition: how to count the current plan and which devices go.
+    if await s_plan_change.intercept(dialog_manager, plan, selected_duration):
+        return
     settings = await settings_dao.get()
     gateways = await payment_gateway_dao.get_active()
     currency = settings.default_currency
@@ -364,6 +378,9 @@ async def on_duration_select(
         user,
         price=duration.get_price(currency),
         currency=currency,
+    )
+    price = await s_plan_change.change_price(
+        dialog_manager, plan, selected_duration, currency, price
     )
     dialog_manager.dialog_data["is_free"] = price.is_free
 

@@ -28,6 +28,9 @@ class Subscription(StatesGroup):
     SUCCESS = State()
     FAILED = State()
     TRIAL = State()
+    # s edition: a plan change (docs/s/README.md).
+    S_CHANGE_MODE = State()
+    S_CHANGE_DEVICES = State()
 
 
 class Dashboard(StatesGroup):

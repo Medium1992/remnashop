@@ -8,6 +8,7 @@ from magic_filter import F
 from src.core.constants import PAYMENT_PREFIX
 from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
 from src.telegram.keyboards import back_main_menu_button, connect_buttons
+from src.telegram.routers.s.plan_change_windows import change_devices, change_mode
 from src.telegram.states import Subscription
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url
@@ -303,6 +304,8 @@ router = Dialog(
     plans,
     duration,
     payment_method,
+    change_mode,
+    change_devices,
     confirm,
     success_payment,
     success_trial,

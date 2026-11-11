@@ -179,7 +179,8 @@ class CreatePayment(Interactor[CreatePaymentDto, PaymentResultDto]):
                     duration_days=data.plan_snapshot.duration,
                     gateway_type=gateway_instance.data.type,
                 )
-                if existing is not None:
+                # s edition: not a change priced or picking devices otherwise.
+                if existing is not None and existing.pricing.change == data.pricing.change:
                     logger.info(
                         f"Reusing pending transaction '{existing.payment_id}' "
                         f"for user '{actor.remna_name}'"

@@ -8,7 +8,9 @@ from src.application.common import EventPublisher, Interactor, Remnawave
 from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
 from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, TransactionDto, UserDto
+from src.application.dto.s_plan_change import ChangeMode
 from src.application.events import TrialActivatedEvent
+from src.application.services.s_plan_change import drop_devices, kept_subscription
 from src.core.enums import PurchaseType, SubscriptionStatus
 from src.core.exceptions import TrialNotAvailableError
 from src.core.types import RemnaUserDto
@@ -205,17 +207,33 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                         f"No subscription found for change for user '{user.remna_name}'"
                     )
 
+                # s edition: the devices that do not fit go first, then the
+                # change as it was priced (docs/s/README.md).
+                change = None if has_trial else transaction.pricing.change
+                if change and change.drop_hwids:
+                    await drop_devices(
+                        self.remnawave, subscription.user_remna_id, change.drop_hwids
+                    )
+
                 await self.subscription_dao.update_status(
                     subscription_id=subscription.id,
                     status=SubscriptionStatus.DELETED,
                 )
 
-                updated_user = await self.remnawave.update_user(
-                    user=user,
-                    uuid=subscription.user_remna_id,
-                    plan=plan,
-                    reset_traffic=True,
-                )
+                if change and change.mode == ChangeMode.KEEP_EXPIRY:
+                    updated_user = await self.remnawave.update_user(
+                        user=user,
+                        uuid=subscription.user_remna_id,
+                        subscription=kept_subscription(subscription, plan),
+                        reset_traffic=True,
+                    )
+                else:
+                    updated_user = await self.remnawave.update_user(
+                        user=user,
+                        uuid=subscription.user_remna_id,
+                        plan=plan,
+                        reset_traffic=True,
+                    )
 
                 new_sub = self._build_subscription_dto(updated_user, plan)
                 await self.subscription_dao.create(

@@ -1,6 +1,7 @@
 from dishka import AnyOf, Provider, Scope, provide, provide_all
 
 from src.application.common import Remnawave
+from src.application.services.s_plan_change import PlanChange
 from src.application.use_cases.s import S_USE_CASES
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.services.s.blocks import BlockService
@@ -37,6 +38,7 @@ class SProvider(Provider):
     block_dao = provide(source=UserBlockDao)
     blocks = provide(source=BlockService)
     invites = provide(source=InviteLinks)
+    plan_change = provide(source=PlanChange)
     texts = provide(source=TextOverrides, scope=Scope.APP)
 
     use_cases = provide_all(*S_USE_CASES)

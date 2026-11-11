@@ -20,6 +20,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.telegram.routers.s import plan_change as s_plan_change
 from src.telegram.routers.s.subscription import subscription_extra as s_subscription_extra
 
 
@@ -196,6 +197,10 @@ async def payment_method_getter(
         raw_price = duration.get_price(gateway.currency)
         price = pricing_service.calculate(
             user, raw_price, gateway.currency, apply_discount=not plan.is_trial
+        )
+        # s edition: a change counts what is left of the current plan.
+        price = await s_plan_change.change_price(
+            dialog_manager, plan, duration.days, gateway.currency, price
         )
         payment_methods.append(
             {

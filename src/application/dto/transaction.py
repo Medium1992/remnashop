@@ -7,6 +7,7 @@ from src.core.enums import Currency, PaymentGatewayType, PurchaseType, Transacti
 
 from .base import BaseDto, TimestampMixin, TrackableMixin
 from .plan import PlanSnapshotDto
+from .s_plan_change import PlanChangeDto
 
 
 @dataclass(kw_only=True)
@@ -14,6 +15,8 @@ class PriceDetailsDto(TrackableMixin):
     original_amount: Decimal
     discount_percent: int
     final_amount: Decimal
+    # s edition: how a plan change was priced, and the devices it removes.
+    change: Optional[PlanChangeDto] = None
 
     @property
     def is_free(self) -> bool:
