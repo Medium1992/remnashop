@@ -12,7 +12,7 @@ from src.core.constants import IMPORTED_TAG
 from src.core.enums import Role, SubscriptionStatus
 from src.core.types import RemnaUserDto
 from src.core.utils.converters import limits_to_plan_type
-from src.core.utils.remna_id import remna_key
+from src.core.utils.remna_id import is_own_remna_user, remna_key
 from src.core.utils.time import datetime_now
 
 
@@ -49,6 +49,19 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
 
             if not user and remna_user.telegram_id:
                 user = await self.user_dao.get_by_telegram_id(remna_user.telegram_id)
+                # The same Telegram account may have panel users of other bots:
+                # one of those never replaces a subscription made here, and is
+                # taken only by an import the admin asked for.
+                if (
+                    user
+                    and not is_own_remna_user(remna_user)
+                    and (not data.creating or await self.subscription_dao.get_current(user.id))
+                ):
+                    logger.info(
+                        f"RemnaUser '{remna_user.username}' ignored: not made by RemnaShop, "
+                        f"and user '{remna_user.telegram_id}' is not linked to it"
+                    )
+                    return False
 
             if not user and data.creating:
                 logger.debug(f"User '{remna_user.id}' not found in bot, creating new user")
@@ -67,9 +80,7 @@ class SyncRemnaUser(Interactor[SyncRemnaUserDto, bool]):
                 )
 
             if not user:
-                logger.warning(
-                    f"Sync failed: user '{remna_user.id}' could not be found or created"
-                )
+                logger.warning(f"Sync failed: user '{remna_user.id}' could not be found or created")
                 return False
 
             subscription = await self.subscription_dao.get_current(user.id)

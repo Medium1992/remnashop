@@ -28,8 +28,10 @@ earlier RemnaShop against a 2.x panel; :func:`decode_remna_id` returns ``None``
 for them so callers can resolve and rewrite them.
 """
 
-from typing import Final, Optional, Protocol
+from typing import Final, Optional, Protocol, Sequence, TypeVar
 from uuid import UUID
+
+from src.core.constants import IMPORTED_TAG, REMNASHOP_PREFIX
 
 # 48 bits for the id: the panel's id is a BigInt sequence starting at 1, and no
 # deployment will come within many orders of magnitude of this ceiling.
@@ -85,3 +87,25 @@ def remna_key(remna_user: HasPanelId) -> UUID:
     replaces reading ``remna_user.uuid``, which no longer exists on 3.x.
     """
     return encode_remna_id(remna_user.id)
+
+
+class HasOwner(Protocol):
+    username: str
+    tag: Optional[str]
+
+
+U = TypeVar("U", bound=HasOwner)
+
+
+def is_own_remna_user(remna_user: HasOwner) -> bool:
+    """Whether RemnaShop made this panel user, or it was tagged to be imported.
+
+    One Telegram account can have users in the panel made by other bots too;
+    the Telegram id alone does not say whose a panel user is, the username does.
+    """
+    return remna_user.username.startswith(REMNASHOP_PREFIX) or remna_user.tag == IMPORTED_TAG
+
+
+def own_remna_user(remna_users: Sequence[U]) -> Optional[U]:
+    """The first of ``remna_users`` that is RemnaShop's (see ``is_own_remna_user``)."""
+    return next((u for u in remna_users if is_own_remna_user(u)), None)
