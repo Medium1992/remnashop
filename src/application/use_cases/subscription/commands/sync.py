@@ -14,7 +14,7 @@ from src.application.use_cases.subscription.queries.match import (
     MatchSubscriptionDto,
 )
 from src.core.enums import SubscriptionStatus
-from src.core.utils.remna_id import remna_key
+from src.core.utils.remna_id import own_remna_user, remna_key
 
 
 class CheckSubscriptionSyncState(Interactor[int, bool]):
@@ -44,7 +44,7 @@ class CheckSubscriptionSyncState(Interactor[int, bool]):
             remna_user = await self.remnawave.get_user_by_uuid(bot_sub.user_remna_id)
         elif target_user.telegram_id:
             remna_users = await self.remnawave.get_users_by_telegram_id(target_user.telegram_id)
-            remna_user = remna_users[0] if remna_users else None
+            remna_user = own_remna_user(remna_users)
 
         remna_sub = RemnaSubscriptionDto.from_remna_user(remna_user) if remna_user else None
 
@@ -89,11 +89,12 @@ class SyncSubscriptionFromRemnawave(Interactor[int, None]):
                     if target_user.telegram_id
                     else []
                 )
-                if not remna_users:
+                own = own_remna_user(remna_users)
+                if not own:
                     logger.info(f"{actor.log} No subscription to sync for user '{user_id}'")
                     return
 
-                await self.sync_remna_user.system(SyncRemnaUserDto(remna_users[0], creating=False))
+                await self.sync_remna_user.system(SyncRemnaUserDto(own, creating=False))
                 logger.info(f"{actor.log} Imported subscription from panel for user '{user_id}'")
                 return
 
@@ -148,10 +149,11 @@ class SyncSubscriptionFromRemnashop(Interactor[int, None]):
                     remna_users = await self.remnawave.get_users_by_telegram_id(
                         target_user.telegram_id
                     )
-                    if remna_users:
-                        await self.remnawave.delete_user(remna_key(remna_users[0]))
+                    own = own_remna_user(remna_users)
+                    if own:
+                        await self.remnawave.delete_user(remna_key(own))
                         logger.info(
-                            f"{actor.log} Deleted user '{remna_users[0].id}' from remnapy "
+                            f"{actor.log} Deleted user '{own.id}' from remnapy "
                             f"due to missing local subscription"
                         )
             else:

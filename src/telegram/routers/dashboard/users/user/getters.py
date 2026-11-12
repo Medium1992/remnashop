@@ -49,6 +49,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.i18n_keys import ByteUnitKey
+from src.core.utils.remna_id import own_remna_user
 
 
 @inject
@@ -650,15 +651,20 @@ async def sync_getter(  # noqa: C901
     remna_sub: Optional[RemnaSubscriptionDto] = None
     remna_updated_at = None
 
-    if target_user.telegram_id:
-        try:
+    # The panel user this subscription is linked to; without one, RemnaShop's
+    # own for the Telegram id, never one made by another bot.
+    remna_user: Optional[RemnaUserDto] = None
+    try:
+        if bot_sub:
+            remna_user = await remnawave.get_user_by_uuid(bot_sub.user_remna_id)
+        elif target_user.telegram_id:
             result = await remnawave.get_users_by_telegram_id(target_user.telegram_id)
-            if result:
-                remna_user: RemnaUserDto = result[0]
-                remna_sub = RemnaSubscriptionDto.from_remna_user(remna_user)
-                remna_updated_at = remna_user.updated_at
-        except NotFoundError:
-            pass
+            remna_user = own_remna_user(result)
+    except NotFoundError:
+        pass
+    if remna_user:
+        remna_sub = RemnaSubscriptionDto.from_remna_user(remna_user)
+        remna_updated_at = remna_user.updated_at
 
     squads = await remnawave.get_internal_squads()
     squads_map = {s.uuid: s.name for s in squads}
