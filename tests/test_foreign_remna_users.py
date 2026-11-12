@@ -96,7 +96,7 @@ class Subscriptions:
 
 
 def sync(users: Users, subscriptions: Subscriptions) -> SyncRemnaUser:
-    return SyncRemnaUser(FakeUow(), users, subscriptions, None, None, None)  # type: ignore[arg-type]
+    return SyncRemnaUser(FakeUow(), users, subscriptions, None, None, None, None)  # type: ignore[arg-type]
 
 
 class TestWebhookSync:
