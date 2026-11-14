@@ -266,8 +266,8 @@ device_confirm_delete_all = Window(
 invite = Window(
     Banner(BannerName.REFERRAL),
     I18nFormat("msg-menu-invite"),
-    I18nFormat("msg-s-invite.note", when=F["s_invite"]),
-    I18nFormat("msg-s-bonus.kept", when=F["s_bonus"]),
+    I18nFormat("msg-s-invite.note", F["s_invite"]),
+    I18nFormat("msg-s-bonus.kept", F["s_bonus"]),
     Row(
         SwitchTo(
             text=I18nFormat("btn-invite.about"),

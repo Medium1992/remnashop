@@ -1,11 +1,39 @@
+import html
+import re
+from dataclasses import replace
+from typing import Optional
+
 from aiogram import Bot
 from aiogram.types import Message
-from aiogram_dialog.api.entities import NewMessage
+from aiogram_dialog.api.entities import NewMessage, OldMessage
 from aiogram_dialog.manager.message_manager import SEND_METHODS
 from aiogram_dialog.manager.message_manager import MessageManager as MessageManagerProtocol
+from loguru import logger
+
+from src.core.constants import TEXT_MEDIA_MAX_LENGTH
+
+_TAG_RE = re.compile(r"<[^>]*>")
+
+
+def visible_length(text: str) -> int:
+    """The length Telegram checks a caption against: no tags, in UTF-16 units."""
+    return len(html.unescape(_TAG_RE.sub("", text)).encode("utf-16-le")) // 2
 
 
 class MessageManager(MessageManagerProtocol):
+    async def show_message(
+        self,
+        bot: Bot,
+        new_message: NewMessage,
+        old_message: Optional[OldMessage],
+    ) -> OldMessage:
+        # A text too long for a caption goes without the picture (a text may be
+        # 4096 long), else Telegram refuses the window: "caption is too long".
+        if new_message.media and visible_length(new_message.text or "") > TEXT_MEDIA_MAX_LENGTH:
+            logger.debug("Text too long for a caption, the window goes without its media")
+            new_message = replace(new_message, media=None)
+        return await super().show_message(bot, new_message, old_message)
+
     async def send_text(self, bot: Bot, new_message: NewMessage) -> Message:
         return await bot.send_message(
             new_message.chat.id,
