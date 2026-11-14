@@ -10,6 +10,7 @@ from src.core.constants import INLINE_QUERY_INVITE, PAYMENT_PREFIX
 from src.core.enums import BannerName
 from src.telegram.keyboards import build_buttons_row, connect_buttons
 from src.telegram.routers.dashboard.handlers import on_smart_search
+from src.telegram.routers.s.bonus import on_take_bonus as s_on_take_bonus
 from src.telegram.routers.s.devices import on_add_slot as s_on_add_slot
 from src.telegram.routers.s.invites import on_new_invite as s_on_new_invite
 from src.telegram.routers.s.rules import on_show_rules as s_on_show_rules
@@ -266,6 +267,7 @@ invite = Window(
     Banner(BannerName.REFERRAL),
     I18nFormat("msg-menu-invite"),
     I18nFormat("msg-s-invite.note", when=F["s_invite"]),
+    I18nFormat("msg-s-bonus.kept", when=F["s_bonus"]),
     Row(
         SwitchTo(
             text=I18nFormat("btn-invite.about"),
@@ -278,6 +280,15 @@ invite = Window(
             text=I18nFormat("btn-invite.copy"),
             copy_text=Format("{referral_url}"),
         ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-s-bonus.take", days=F["s_bonus_days"]),
+            id="s_bonus_take",
+            on_click=s_on_take_bonus,
+            style=Style(ButtonStyle.SUCCESS),
+        ),
+        when=F["s_bonus"] & F["s_bonus_days"],
     ),
     Row(
         Button(

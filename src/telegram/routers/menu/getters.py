@@ -6,7 +6,7 @@ from dishka.integrations.aiogram_dialog import inject
 from loguru import logger
 
 from src.application.common import BotService, Remnawave, TranslatorRunner
-from src.application.common.dao import ReferralDao, SettingsDao, SubscriptionDao
+from src.application.common.dao import PlanDao, ReferralDao, SettingsDao, SubscriptionDao
 from src.application.dto import TelegramUserDto
 from src.application.use_cases.misc.queries.menu import GetMenuData
 from src.core.config import AppConfig
@@ -17,7 +17,9 @@ from src.core.utils.i18n_helpers import (
     i18n_format_traffic_limit,
 )
 from src.core.utils.time import get_traffic_reset_delta
+from src.infrastructure.services.s.bonus import BonusDays
 from src.infrastructure.services.s.invites import InviteLinks
+from src.telegram.routers.s.bonus import bonus_extra as s_bonus_extra
 from src.telegram.routers.s.devices import devices_extra as s_devices_extra
 from src.telegram.routers.s.invites import invite_extra as s_invite_extra
 
@@ -57,6 +59,7 @@ async def menu_getter(
             "is_mini_app_reserve": config.bot.is_mini_app and settings.extra.mini_app_reserve,
             "support_url": support_url,
             "s_rules": int(bool(settings.extra.s.rules.text)),
+            "s_connect": int(settings.extra.s.connect.enabled),
             "web_enabled": config.web_enabled,
             "web_cabinet_url": config.web_cabinet_url.strip(),
             # referral
@@ -225,6 +228,8 @@ async def invite_getter(
     settings_dao: FromDishka[SettingsDao],
     referral_dao: FromDishka[ReferralDao],
     invite_links: FromDishka[InviteLinks],
+    bonus: FromDishka[BonusDays],
+    plan_dao: FromDishka[PlanDao],
     **kwargs: Any,
 ) -> dict[str, Any]:
     settings = await settings_dao.get()
@@ -244,6 +249,7 @@ async def invite_getter(
         "withdraw": support_url,
         "referral_reset_enabled": int(settings.extra.referral_reset.enabled),
         **await s_invite_extra(invite_links, user, i18n),
+        **await s_bonus_extra(bonus, settings_dao, plan_dao, user, i18n),
     }
 
 

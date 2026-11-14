@@ -9,6 +9,7 @@ from src.core.enums import BannerName, SubscriptionStatus
 from src.telegram.keyboards import back_main_menu_button
 from src.telegram.routers.dashboard.broadcast.handlers import on_content_input, on_preview
 from src.telegram.routers.s.block.dialog import start_block_dialog as s_start_block_dialog
+from src.telegram.routers.s.give_days import on_give_days_input as s_on_give_days_input
 from src.telegram.states import DashboardRemnashop, DashboardUser
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import (
@@ -554,6 +555,7 @@ give_subscription = Window(
 subscription_duration = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-user-give-subscription-duration"),
+    I18nFormat("msg-s-give.days"),
     Group(
         Select(
             text=I18nFormat("btn-common.duration", value=F["item"]["days"]),
@@ -572,6 +574,7 @@ subscription_duration = Window(
             state=DashboardUser.GIVE_SUBSCRIPTION,
         ),
     ),
+    MessageInput(func=s_on_give_days_input),
     IgnoreUpdate(),
     state=DashboardUser.SUBSCRIPTION_DURATION,
     getter=subscription_duration_getter,

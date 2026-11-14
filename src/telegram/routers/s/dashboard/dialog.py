@@ -20,6 +20,7 @@ from src.telegram.widgets.kbd import (
 )
 from src.telegram.window import Window
 
+from .bonus import bonus
 from .getters import blocked_getter, inactive_list_getter, s_getter
 from .handlers import (
     on_back_from_number,
@@ -122,6 +123,14 @@ main = Window(
         )
     ),
     Row(_toggle("plans_calendar")),
+    Row(_toggle("connect_page")),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-s.bonus", enabled=F["bonus_enabled"]),
+            id="bonus",
+            state=SDashboard.BONUS,
+        )
+    ),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(SwitchTo(I18nFormat("btn-s.texts"), id="texts", state=SDashboard.TEXTS)),
     Row(
@@ -441,4 +450,5 @@ router = Dialog(
     text_list,
     text_view,
     text_confirm,
+    bonus,
 )

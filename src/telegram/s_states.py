@@ -21,7 +21,12 @@ class SDashboard(StatesGroup):
     TEXT_LIST = State()
     TEXT_VIEW = State()
     TEXT_CONFIRM = State()
+    BONUS = State()
 
 
 class SBlock(StatesGroup):
+    MAIN = State()
+
+
+class SConnect(StatesGroup):
     MAIN = State()

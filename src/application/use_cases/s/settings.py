@@ -6,7 +6,7 @@ from typing import Any, Final, Optional
 from loguru import logger
 
 from src.application.common import Interactor
-from src.application.common.dao import SettingsDao
+from src.application.common.dao import PlanDao, SettingsDao
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import UserDto
@@ -40,6 +40,8 @@ TOGGLE_FIELDS: Final[frozenset[str]] = frozenset(
         "chat_access.enabled",
         "invites.enabled",
         "plans.calendar_months",
+        "connect.enabled",
+        "bonus.enabled",
     }
 )
 
@@ -175,6 +177,29 @@ class UpdateRouterHwids(Interactor[str, list[str]]):
 
         logger.info(f"{actor.log} Router HWIDs set: {len(hwids)}")
         return hwids
+
+
+class SetBonusPlan(Interactor[Optional[int], Optional[int]]):
+    """The plan bonus days are taken on by someone with no subscription."""
+
+    required_permission = Permission.SETTINGS_EXTRA
+
+    def __init__(self, uow: UnitOfWork, settings_dao: SettingsDao, plan_dao: PlanDao) -> None:
+        self.uow = uow
+        self.settings_dao = settings_dao
+        self.plan_dao = plan_dao
+
+    async def _execute(self, actor: UserDto, plan_id: Optional[int]) -> Optional[int]:
+        if plan_id is not None and await self.plan_dao.get_by_id(plan_id) is None:
+            raise ValueError(f"Plan '{plan_id}' not found")
+        async with self.uow:
+            settings = await self.settings_dao.get()
+            settings.extra.s.bonus.plan_id = plan_id
+            await self.settings_dao.update(settings)
+            await self.uow.commit()
+
+        logger.info(f"{actor.log} Bonus days plan set to '{plan_id}'")
+        return plan_id
 
 
 class SetRulesText(Interactor[str, str]):

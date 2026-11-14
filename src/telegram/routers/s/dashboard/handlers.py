@@ -42,6 +42,8 @@ TOGGLES = {
     "inactive_include_disabled": "inactive.include_disabled",
     "invites_enabled": "invites.enabled",
     "plans_calendar": "plans.calendar_months",
+    "connect_page": "connect.enabled",
+    "bonus_enabled": "bonus.enabled",
 }
 
 # Button id -> (number setting, window to come back to).

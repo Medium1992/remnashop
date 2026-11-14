@@ -1,6 +1,7 @@
 from aiogram import Router
 
 from . import dashboard, extra, menu, subscription
+from .s import connect as s_connect
 from .s.block import dialog as s_block_dialog
 from .s.block import handlers as s_block_handlers
 from .s.dashboard import dialog as s_dashboard_dialog
@@ -23,6 +24,7 @@ def setup_routers(router: Router) -> None:
         menu.dialog.router,
         #
         subscription.dialog.router,
+        s_connect.router,
         #
         dashboard.dialog.router,
         dashboard.statistics.dialog.router,

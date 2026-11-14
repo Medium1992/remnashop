@@ -2,9 +2,12 @@ from dishka import AnyOf, Provider, Scope, provide, provide_all
 
 from src.application.common import Remnawave
 from src.application.services.s_plan_change import PlanChange
+from src.application.use_cases.referral.commands.rewards import GiveReferrerReward
 from src.application.use_cases.s import S_USE_CASES
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
+from src.infrastructure.database.dao.s_bonus import BonusDaysDao
 from src.infrastructure.services.s.blocks import BlockService
+from src.infrastructure.services.s.bonus import BonusDays, SGiveReferrerReward
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.inactive import InactiveProfiles
@@ -40,5 +43,13 @@ class SProvider(Provider):
     invites = provide(source=InviteLinks)
     plan_change = provide(source=PlanChange)
     texts = provide(source=TextOverrides, scope=Scope.APP)
+    bonus_dao = provide(source=BonusDaysDao)
+    bonus = provide(source=BonusDays)
+    # Keeps referral days while bonus days are on; upstream's reward otherwise.
+    give_referrer_reward = provide(
+        source=SGiveReferrerReward,
+        provides=AnyOf[GiveReferrerReward, SGiveReferrerReward],
+        override=True,
+    )
 
     use_cases = provide_all(*S_USE_CASES)

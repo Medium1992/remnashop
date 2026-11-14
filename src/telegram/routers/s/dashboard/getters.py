@@ -78,6 +78,8 @@ async def s_getter(
         "invites_ttl": s.invites.ttl_hours,
         "invites_max": s.invites.max_active,
         "plans_calendar": int(s.plans.calendar_months),
+        "connect_page": int(s.connect.enabled),
+        "bonus_enabled": int(s.bonus.enabled),
         "kind": dialog_manager.dialog_data.get("s_kind", "stale"),
     }
 

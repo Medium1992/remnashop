@@ -7,7 +7,7 @@ existed loads with the defaults below. Every feature defaults to off, so an
 """
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 from .base import TrackableMixin
 
@@ -98,6 +98,25 @@ class RulesTextSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class ConnectPageSettingsDto(TrackableMixin):
+    """"Connect" opens a window with the link, its QR code and the button to open
+    it, instead of opening the link right away."""
+
+    enabled: bool = False
+
+
+@dataclass(kw_only=True)
+class BonusDaysSettingsDto(TrackableMixin):
+    """Referral days kept until the referrer takes them, instead of added at once.
+
+    ``plan_id`` is the plan a subscription is made on for someone who has none.
+    """
+
+    enabled: bool = False
+    plan_id: Optional[int] = None
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
@@ -107,6 +126,8 @@ class SSettingsDto(TrackableMixin):
     invites: InviteLinksSettingsDto = field(default_factory=InviteLinksSettingsDto)
     plans: PlanTermsSettingsDto = field(default_factory=PlanTermsSettingsDto)
     rules: RulesTextSettingsDto = field(default_factory=RulesTextSettingsDto)
+    connect: ConnectPageSettingsDto = field(default_factory=ConnectPageSettingsDto)
+    bonus: BonusDaysSettingsDto = field(default_factory=BonusDaysSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

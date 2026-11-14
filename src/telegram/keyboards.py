@@ -10,6 +10,7 @@ from magic_filter import F
 
 from src.core.constants import DOCS, GOTO_PREFIX, PAYMENT_PREFIX, REPOSITORY, T_ME
 from src.core.enums import ButtonType, PurchaseType
+from src.telegram.s_states import SConnect
 from src.telegram.states import DashboardUser, MainMenu, Notification, Subscription
 from src.telegram.widgets import I18nFormat
 from src.telegram.widgets.kbd import Button, CopyText, Group, ListGroup, Row, Start, Url, WebApp
@@ -87,7 +88,7 @@ custom_buttons = (
 )
 
 
-connect_buttons = (
+connect_page_buttons = (
     WebApp(
         text=I18nFormat("btn-menu.connect"),
         url=Format("{connection_url}"),
@@ -108,6 +109,18 @@ connect_buttons = (
         when=~F["is_mini_app"] & F["connectable"],
         style=Style(ButtonStyle.PRIMARY),
     ),
+)
+
+connect_buttons = (
+    # s edition: "Connect" opens the link, its QR code and these buttons.
+    Start(
+        text=I18nFormat("btn-menu.connect"),
+        id="s_connect",
+        state=SConnect.MAIN,
+        when=F["s_connect"] & F["connectable"],
+        style=Style(ButtonStyle.PRIMARY),
+    ),
+    Group(*connect_page_buttons, when=~F["s_connect"]),
 )
 
 main_menu_button = (
