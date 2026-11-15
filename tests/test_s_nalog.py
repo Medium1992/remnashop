@@ -1,5 +1,6 @@
 """The "Мой налог" client and the bot's login, against a fake cabinet over HTTP."""
 
+import base64
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,7 @@ from src.infrastructure.services.s.nalog import (
     cabinet_time,
     normalize_phone,
     receipt_url,
+    token_expiry,
 )
 from src.infrastructure.services.s.nalog_auth import (
     NalogAuth,
@@ -121,7 +123,7 @@ class TestClient:
         fake.answer("/api/v1/auth/challenge/sms/verify", body=session_answer())
         challenge = await client.sms_start("8 (900) 123-45-67")
         assert challenge.token == "C1"
-        await client.sms_verify("+7 900 123-45-67", " 1234 ", challenge.token, "dev1")
+        await client.sms_verify("+7 900 123-45-67", " 12 34 ", challenge.token, "dev1")
         (_, start, _), (_, verify, _) = fake.requests
         assert start == {"phone": "79001234567", "requireTpToBeActive": True}
         assert verify["phone"] == "79001234567" and verify["code"] == "1234"
@@ -423,3 +425,110 @@ def test_secrets_stay_out_of_the_repr() -> None:
     text = repr(replace(logged_in(), phone="79001234567", proxy="socks5://u:p@h:1"))
     for secret in ("secret", "R1", "T0", "79001234567", "u:p@h"):
         assert secret not in text
+
+
+class TestBrowserLogin:
+    async def test_a_session_from_a_browser_is_checked_at_once(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/auth/token", body=session_answer("T5", "R5"))
+        service = auth(cabinet, NalogAccountDto())
+        account = await service.login_browser(INN, "browserdev", "R-from-browser")
+        assert account.logged_in and account.method == NalogLogin.BROWSER
+        assert stored(service).device_id == "browserdev"
+        assert stored(service).refresh_token == "R5"
+        assert fake.requests[0][1]["refreshToken"] == "R-from-browser"
+        assert fake.requests[0][1]["deviceInfo"]["sourceDeviceId"] == "browserdev"
+
+    async def test_a_dead_session_is_refused_and_nothing_is_saved(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/auth/token", status=401)
+        service = auth(cabinet, NalogAccountDto())
+        with pytest.raises(NalogAuthError):
+            await service.login_browser(INN, "browserdev", "R-old")
+        assert not stored(service).logged_in
+
+    async def test_a_browser_login_is_lost_not_logged_in_again(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/auth/token", status=401)
+        service = auth(cabinet, logged_in(method=NalogLogin.BROWSER, password=None))
+        with pytest.raises(NalogLoginLostError):
+            await service.session()
+        assert fake.paths() == ["/api/v1/auth/token"]
+
+
+def jwt(payload: dict[str, Any]) -> str:
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return f"eyJhbGciOiJIUzI1NiJ9.{body}.sig"
+
+
+class TestAccessKey:
+    async def test_a_key_is_checked_and_kept(self, cabinet: tuple[Cabinet, NalogClient]) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/user", body={"inn": INN, "displayName": "Иван"})
+        service = auth(cabinet, NalogAccountDto(device_id="dev1"))
+        key = jwt({"sub": "x"})
+        account = await service.login_key(INN, key)
+        assert account.logged_in and account.method == NalogLogin.KEY
+        assert account.token_expires_at is None and account.refresh_token is None
+        assert fake.requests[0][2]["Authorization"] == f"Bearer {key}"
+        _, token, inn = await service.session()
+        assert (token, inn) == (key, INN) and len(fake.requests) == 1
+
+    async def test_a_refused_key_is_not_saved(self, cabinet: tuple[Cabinet, NalogClient]) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/user", status=401)
+        service = auth(cabinet, NalogAccountDto())
+        with pytest.raises(NalogAuthError):
+            await service.login_key(INN, jwt({}))
+        assert not stored(service).logged_in
+
+    async def test_a_key_of_another_taxpayer_is_refused(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        fake, _ = cabinet
+        fake.answer("/api/v1/user", body={"inn": "772771004120"})
+        with pytest.raises(NalogAuthError):
+            await auth(cabinet, NalogAccountDto()).login_key(INN, jwt({}))
+
+    async def test_no_profile_where_looked_does_not_refuse_the_key(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        service = auth(cabinet, NalogAccountDto())
+        assert (await service.login_key(INN, jwt({}))).logged_in
+
+    async def test_an_expired_key_loses_the_login(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        old = logged_in(
+            method=NalogLogin.KEY,
+            refresh_token=None,
+            token=jwt({}),
+            token_expires_at=datetime_now() - timedelta(seconds=1),
+        )
+        service = auth(cabinet, old)
+        with pytest.raises(NalogLoginLostError):
+            await service.session()
+        assert not stored(service).logged_in and stored(service).token == old.token
+
+    async def test_a_key_refused_later_loses_the_login_once(
+        self, cabinet: tuple[Cabinet, NalogClient]
+    ) -> None:
+        key = logged_in(method=NalogLogin.KEY, refresh_token=None, token=jwt({}))
+        service = auth(cabinet, replace(key, token_expires_at=None))
+        with pytest.raises(NalogLoginLostError):
+            await service.forget_token("401")
+        await service.forget_token("401")  # already lost: quiet
+        assert "refused" in (stored(service).lost_reason or "")
+
+
+def test_key_expiry_is_read_from_the_jwt() -> None:
+    assert token_expiry(jwt({"exp": 2000000000})) == datetime.fromtimestamp(
+        2000000000, tz=timezone.utc
+    )
+    assert token_expiry(jwt({})) is None and token_expiry("not-a-jwt") is None

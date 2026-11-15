@@ -186,7 +186,7 @@ class Auth:
             raise self.fails
         return self.cabinet, "T", INN
 
-    async def forget_token(self) -> None:
+    async def forget_token(self, reason: str = "") -> None:
         self.forgotten += 1
 
 
@@ -570,3 +570,15 @@ def test_the_amount_paid() -> None:
     assert payment_amount({"final_amount": "199.00"}) == Decimal("199.00")
     assert payment_amount({"final_amount": 99.5}) == Decimal("99.5")
     assert payment_amount({}) == 0
+
+
+async def test_a_refused_access_key_tells_the_admins() -> None:
+    class KeyAuth(Auth):
+        async def forget_token(self, reason: str = "") -> None:
+            raise NalogLoginLostError("the access key was refused")
+
+    dao = FakeReceipts(receipt())
+    receipts, notifier = service(dao, auth=KeyAuth(Cabinet(income=NalogAuthError("401"))))
+    await receipts.run()
+    assert status(dao) == ReceiptStatus.PENDING
+    assert notifier.sent[0][0] == "event-s-receipts.login-lost"

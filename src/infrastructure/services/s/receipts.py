@@ -233,7 +233,10 @@ class Receipts:
         except NalogAuthError as e:
             # Refused before anything was done; the token goes, the row waits.
             await self._back_to_queue(receipt, attempts - 1, short(e))
-            await self.auth.forget_token()
+            try:
+                await self.auth.forget_token(short(e))
+            except NalogLoginLostError as lost:
+                await self._tell_login_lost(str(lost))
             return None
         except NalogUnreachableError as e:
             if attempts >= MAX_ATTEMPTS:

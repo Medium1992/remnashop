@@ -40,6 +40,7 @@ INPUT: Final[str] = "s_receipts_input"
 LOGIN_INN: Final[str] = "s_receipts_inn"
 LOGIN_PHONE: Final[str] = "s_receipts_phone"
 CHALLENGE: Final[str] = "s_receipts_challenge"
+LOGIN_DEVICE: Final[str] = "s_receipts_device"
 LIST_KIND: Final[str] = "s_receipts_list"  # "unissued", "undelivered" or a user id
 ITEM: Final[str] = "s_receipts_item"
 
@@ -110,7 +111,9 @@ async def on_receipts_toggle(
 async def on_ask(callback: CallbackQuery, widget: Any, dialog_manager: DialogManager) -> None:
     """A button that asks for text: its id says what for."""
     kind = widget.widget_id.removeprefix("r_ask_")
-    dialog_manager.dialog_data[INPUT] = "inn" if kind in ("password", "sms") else kind
+    dialog_manager.dialog_data[INPUT] = (
+        "inn" if kind in ("password", "sms", "browser", "key") else kind
+    )
     dialog_manager.dialog_data["s_receipts_login"] = kind
     await dialog_manager.switch_to(SDashboard.RECEIPTS_INPUT)
 
@@ -138,7 +141,31 @@ async def on_list(callback: CallbackQuery, widget: Any, dialog_manager: DialogMa
 
 
 async def input_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
-    return {"input": dialog_manager.dialog_data.get(INPUT, "inn")}
+    kind = dialog_manager.dialog_data.get(INPUT, "inn")
+    return {"input": kind, "is_code": int(kind == "code")}
+
+
+@inject
+async def on_new_code(
+    callback: CallbackQuery,
+    widget: Any,
+    dialog_manager: DialogManager,
+    auth: FromDishka[NalogAuth],
+    notifier: FromDishka[Notifier],
+) -> None:
+    """A fresh SMS for the same phone: the old code expired or was mistyped."""
+    if not _allowed(dialog_manager):
+        return
+    data = dialog_manager.dialog_data
+    user = _actor(dialog_manager)
+    try:
+        challenge = await auth.sms_start(data.get(LOGIN_PHONE, ""))
+    except NalogError as error:
+        logger.warning(f"{user.log} Tax cabinet refused a new SMS: {error}")
+        await _tell(notifier, user, "ntf-s-receipts.cabinet", reason=html.escape(str(error)))
+        return
+    data[CHALLENGE] = challenge.token
+    await _tell(notifier, user, "ntf-s-receipts.code-sent")
 
 
 async def _drop(message: Message) -> None:
@@ -166,7 +193,7 @@ async def on_input(
     kind = data.get(INPUT, "")
     text = (message.text or "").strip()
     user = _actor(dialog_manager)
-    if kind in ("password", "code", "proxy"):
+    if kind in ("password", "code", "proxy", "refresh", "key"):
         await _drop(message)
 
     try:
@@ -179,8 +206,9 @@ async def on_input(
     except _RefusedError as refused:
         await _tell(notifier, user, f"ntf-s-receipts.{refused}")
     except NalogError as error:
-        logger.warning(f"{user.log} Tax cabinet refused: {error}")
-        await _tell(notifier, user, "ntf-s-receipts.cabinet", reason=html.escape(str(error)))
+        logger.warning(f"{user.log} Tax cabinet refused at '{kind}': {error}")
+        key = "ntf-s-receipts.code-refused" if kind == "code" else "ntf-s-receipts.cabinet"
+        await _tell(notifier, user, key, reason=html.escape(str(error)))
     except Exception as error:
         logger.exception(f"{user.log} Receipts input '{kind}' failed")
         await _tell(notifier, user, "ntf-s-receipts.cabinet", reason=html.escape(str(error)))
@@ -205,7 +233,9 @@ async def _handle_input(  # noqa: C901
         if not is_inn(text):
             raise _RefusedError("inn-invalid")
         data[LOGIN_INN] = text
-        data[INPUT] = "password" if data.get("s_receipts_login") == "password" else "phone"
+        data[INPUT] = {"password": "password", "browser": "device", "key": "key"}.get(
+            data.get("s_receipts_login", ""), "phone"
+        )
         return None
 
     if kind == "password":
@@ -224,6 +254,29 @@ async def _handle_input(  # noqa: C901
             data.get(LOGIN_INN, ""), data.get(LOGIN_PHONE, ""), text, data.get(CHALLENGE, "")
         )
         data.pop(CHALLENGE, None)
+        return "ntf-s-receipts.logged-in", {}
+
+    if kind == "key":
+        key = text.strip().strip('"').removeprefix("Bearer ").strip()
+        if len(key) < 16 or " " in key:
+            raise _RefusedError("key-invalid")
+        await auth.login_key(data.get(LOGIN_INN, ""), key)
+        return "ntf-s-receipts.logged-in", {}
+
+    if kind == "device":
+        device_id = text.strip().strip('"')
+        if not device_id or len(device_id) > 64 or " " in device_id:
+            raise _RefusedError("device-invalid")
+        data[LOGIN_DEVICE] = device_id
+        data[INPUT] = "refresh"
+        return None
+
+    if kind == "refresh":
+        refresh_token = text.strip().strip('"')
+        if len(refresh_token) < 16 or " " in refresh_token:
+            raise _RefusedError("refresh-invalid")
+        await auth.login_browser(data.get(LOGIN_INN, ""), data.get(LOGIN_DEVICE, ""), refresh_token)
+        data.pop(LOGIN_DEVICE, None)
         return "ntf-s-receipts.logged-in", {}
 
     if kind == "proxy":
@@ -418,6 +471,8 @@ receipts_main = Window(
             on_click=on_receipts_toggle,
         )
     ),
+    Row(Button(I18nFormat("btn-s-receipts.login-key"), id="r_ask_key", on_click=on_ask)),
+    Row(Button(I18nFormat("btn-s-receipts.login-browser"), id="r_ask_browser", on_click=on_ask)),
     Row(
         Button(I18nFormat("btn-s-receipts.login-password"), id="r_ask_password", on_click=on_ask),
         Button(I18nFormat("btn-s-receipts.login-sms"), id="r_ask_sms", on_click=on_ask),
@@ -456,6 +511,14 @@ receipts_main = Window(
 receipts_input = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-receipts.input"),
+    Row(
+        Button(
+            I18nFormat("btn-s-receipts.new-code"),
+            id="r_new_code",
+            on_click=on_new_code,
+            when=F["is_code"],
+        )
+    ),
     Row(Button(I18nFormat("btn-back.general"), id="back", on_click=on_input_back)),
     MessageInput(func=on_input),
     IgnoreUpdate(),

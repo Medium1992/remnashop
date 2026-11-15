@@ -15,7 +15,7 @@ tells the admins once.
 import secrets
 from dataclasses import replace
 from datetime import timedelta
-from typing import Callable, Final, Optional
+from typing import Callable, Final, NoReturn, Optional
 
 from loguru import logger
 
@@ -24,7 +24,7 @@ from src.application.dto.s_receipts import NalogAccountDto, NalogLogin
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.dao.s_receipts import NalogAccountDao
 
-from .nalog import NalogAuthError, NalogClient, NalogSession, SmsChallenge
+from .nalog import NalogAuthError, NalogClient, NalogError, NalogSession, SmsChallenge, token_expiry
 
 # A token this close to its end is refreshed before use.
 TOKEN_MARGIN: Final[timedelta] = timedelta(minutes=2)
@@ -96,6 +96,8 @@ class NalogAuth:
         account = await self.account()
         if not account.logged_in or not account.inn:
             raise NalogNotLoggedInError(account.lost_reason or "not logged in")
+        if account.method == NalogLogin.KEY:
+            return await self._key_session(account)
         if self._fresh(account):
             return self.make_client(account.proxy), account.token or "", account.inn
 
@@ -137,6 +139,21 @@ class NalogAuth:
         await self.uow.commit()
         raise NalogLoginLostError(str(error)) from error
 
+    async def _key_session(self, account: NalogAccountDto) -> tuple[NalogClient, str, str]:
+        expires = account.token_expires_at
+        if expires is not None and expires <= datetime_now():
+            await self._lose(account, "the access key has expired")
+        return self.make_client(account.proxy), account.token or "", account.inn or ""
+
+    async def _lose(self, account: NalogAccountDto, reason: str) -> NoReturn:
+        logger.error(f"Tax cabinet login lost: {reason}")
+        async with self.uow:
+            await self.account_dao.save(
+                replace(account, lost_at=datetime_now(), lost_reason=reason[:500])
+            )
+            await self.uow.commit()
+        raise NalogLoginLostError(reason)
+
     @staticmethod
     def _fresh(account: NalogAccountDto) -> bool:
         return bool(
@@ -157,8 +174,15 @@ class NalogAuth:
             lost_reason=None,
         )
 
-    async def forget_token(self) -> None:
-        """The cabinet refused the token: the next ``session`` refreshes it."""
+    async def forget_token(self, reason: str = "") -> None:
+        """The cabinet refused the token: the next ``session`` refreshes it.
+        An access key has nothing to refresh it with: the login is lost then
+        (``NalogLoginLostError``), the key kept for the admin to see."""
+        account = await self.account()
+        if account.method == NalogLogin.KEY:
+            if account.lost_at is None:
+                await self._lose(account, f"the access key was refused: {reason}".rstrip(": "))
+            return
         async with self.uow:
             account = await self.account_dao.get(lock=True)
             if account.token:
@@ -188,6 +212,61 @@ class NalogAuth:
 
     async def sms_start(self, phone: str) -> SmsChallenge:
         return await (await self.client()).sms_start(phone)
+
+    async def login_browser(self, inn: str, device_id: str, refresh_token: str) -> NalogAccountDto:
+        """A session from a login made in a browser: its device id and refresh
+        token. Refreshed once at once, so a key that does not work from here
+        is refused now and not at the first payment."""
+        account = await self.account()
+        session = await self.make_client(account.proxy).refresh(refresh_token, device_id)
+        if session.inn and session.inn != inn:
+            raise NalogAuthError(f"The session belongs to INN {session.inn}, not {inn}", "inn")
+        account = self._with_session(
+            replace(
+                account,
+                inn=inn,
+                method=NalogLogin.BROWSER,
+                password=None,
+                phone=None,
+                device_id=device_id,
+            ),
+            session,
+        )
+        await self._save(account)
+        logger.info("Logged in to the tax cabinet with a session from a browser")
+        return account
+
+    async def login_key(self, inn: str, key: str) -> NalogAccountDto:
+        """An access key made in the cabinet. Tried at once on the taxpayer's
+        profile, so a key that does not work is refused now."""
+        account = await self.account()
+        try:
+            profile = await self.make_client(account.proxy).profile(key)
+        except NalogError as e:
+            if type(e) is not NalogError or e.status != 404:
+                raise
+            # The profile is not where it was looked for: the key itself is not
+            # refused. The first receipt tells for sure.
+            logger.warning(f"Access key not checked, no profile: {e}")
+            profile = {}
+        key_inn = str(profile.get("inn") or "")
+        if key_inn and key_inn != inn:
+            raise NalogAuthError(f"The key belongs to INN {key_inn}, not {inn}", "inn")
+        account = replace(
+            account,
+            inn=inn,
+            method=NalogLogin.KEY,
+            token=key,
+            token_expires_at=token_expiry(key),
+            refresh_token=None,
+            password=None,
+            phone=None,
+            lost_at=None,
+            lost_reason=None,
+        )
+        await self._save(account)
+        logger.info("Logged in to the tax cabinet with an access key")
+        return account
 
     async def sms_verify(self, inn: str, phone: str, code: str, challenge: str) -> NalogAccountDto:
         account = await self.account()

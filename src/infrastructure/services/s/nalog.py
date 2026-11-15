@@ -18,6 +18,7 @@ receipt matters most, so the errors say it:
 - ``NalogError``: the cabinet refused the request and said why.
 """
 
+import base64
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -141,6 +142,19 @@ def receipt_url(inn: str, receipt_uuid: str) -> str:
     return f"{BASE_URL}/v1/receipt/{inn}/{receipt_uuid}/print"
 
 
+def token_expiry(token: str) -> Optional[datetime]:
+    """When a JWT says it ends; None if it says nothing (or is no JWT)."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+        exp = payload.get("exp") if isinstance(payload, dict) else None
+        return datetime.fromtimestamp(int(exp), tz=timezone.utc) if exp else None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
 def _expires_at(value: Any) -> datetime:
     if isinstance(value, str) and value:
         try:
@@ -196,7 +210,8 @@ class NalogClient:
     ) -> NalogSession:
         body = {
             "phone": normalize_phone(phone),
-            "code": code.strip(),
+            # Digits only: "12 34" or "1234." typed by hand is the same code.
+            "code": "".join(ch for ch in code if ch.isdigit()),
             "challengeToken": challenge,
             "deviceInfo": self.device_info(device_id),
         }
@@ -208,6 +223,22 @@ class NalogClient:
         data = await self._call("POST", "/v1/auth/token", body, auth_call=True)
         # The cabinet may keep the refresh token as it was.
         return self._session(data, refresh_token=refresh_token)
+
+    async def profile(self, token: str) -> dict[str, Any]:
+        """The taxpayer the token opens; checks that a token works."""
+        async with self._session_http() as http:
+            try:
+                async with http.get(
+                    self.base_url + "/v1/user", headers=self._headers(token)
+                ) as response:
+                    content = await response.read()
+                    if response.status != 200:
+                        raise self._error(response.status, content)
+                    return self._json(content)
+            except NalogError:
+                raise
+            except (*_NOT_CONNECTED, aiohttp.ClientError, TimeoutError) as e:
+                raise NalogUnreachableError(f"{type(e).__name__}: {e}", "network") from e
 
     # -- incomes ------------------------------------------------------------
 

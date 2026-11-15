@@ -15,10 +15,15 @@ from src.application.dto import UserDto
 from src.application.dto.s_receipts import NalogAccountDto, ReceiptStatus
 from src.core.constants import USER_KEY
 from src.core.enums import Role
-from src.infrastructure.services.s.nalog import CANCEL_WRONG, NalogAuthError, ReceiptFile
+from src.infrastructure.services.s.nalog import (
+    CANCEL_WRONG,
+    NalogAuthError,
+    NalogError,
+    ReceiptFile,
+)
 from src.infrastructure.services.s.nalog_auth import NalogAuth, is_payer_inn
 from src.infrastructure.services.s.receipts import Receipts, parse_receipt_uuid
-from src.telegram.routers.s.dashboard.receipts import INPUT, ITEM, LOGIN_INN, on_input
+from src.telegram.routers.s.dashboard.receipts import INPUT, ITEM, LOGIN_INN, on_input, on_new_code
 from src.telegram.routers.s.receipts import on_receipt
 from src.telegram.s_states import SDashboard
 from tests.test_s_receipts import (
@@ -325,3 +330,63 @@ async def test_without_the_permission_nothing_is_done() -> None:
     manager.dialog_data[INPUT] = "proxy"
     await on_input(Message("-"), None, manager)  # type: ignore[arg-type]
     assert auth.proxy == "unset" and not notices.sent
+
+
+async def test_a_refused_code_says_so_and_waits_for_another() -> None:
+    class Refusing(FakeAuth):
+        async def sms_verify(self, inn: str, phone: str, code: str, challenge: str) -> None:
+            raise NalogError("Ошибка верификации", "validation.failed", 422)
+
+    manager, notices, _, message = await type_in(
+        "1234", Refusing(), **{INPUT: "code", LOGIN_INN: INN, "s_receipts_phone": "79001234567"}
+    )
+    assert notices.sent == ["ntf-s-receipts.code-refused"] and message.deleted
+    assert manager.dialog_data[INPUT] == "code" and manager.state is None
+
+
+async def test_a_new_code_for_the_same_phone() -> None:
+    notices, auth = Notices(), FakeAuth()
+    phones: list[str] = []
+
+    async def sms_start(phone: str) -> Any:
+        phones.append(phone)
+        return SimpleNamespace(token="C2", expires_in=120)
+
+    auth.sms_start = sms_start  # type: ignore[method-assign]
+    manager = Manager({NalogAuth: auth, Notifier: notices})
+    manager.dialog_data.update({INPUT: "code", "s_receipts_phone": "79001234567"})
+    await on_new_code(None, None, manager)  # type: ignore[arg-type]
+    assert phones == ["79001234567"] and manager.dialog_data["s_receipts_challenge"] == "C2"
+    assert notices.sent == ["ntf-s-receipts.code-sent"]
+
+
+async def test_login_from_a_browser_in_three_steps() -> None:
+    sessions: list[tuple[str, str, str]] = []
+
+    class Browser(FakeAuth):
+        async def login_browser(self, inn: str, device_id: str, refresh_token: str) -> None:
+            sessions.append((inn, device_id, refresh_token))
+
+    auth = Browser()
+    manager, _, _, _ = await type_in(INN, auth, **{INPUT: "inn", "s_receipts_login": "browser"})
+    assert manager.dialog_data[INPUT] == "device"
+    manager, _, _, _ = await type_in('"dev123"', auth, **manager.dialog_data)
+    assert manager.dialog_data[INPUT] == "refresh"
+    manager, notices, _, message = await type_in("r" * 40, auth, **manager.dialog_data)
+    assert sessions == [(INN, "dev123", "r" * 40)] and message.deleted
+    assert notices.sent == ["ntf-s-receipts.logged-in"] and manager.state == SDashboard.RECEIPTS
+
+
+async def test_login_with_an_access_key() -> None:
+    keys: list[tuple[str, str]] = []
+
+    class Keyed(FakeAuth):
+        async def login_key(self, inn: str, key: str) -> None:
+            keys.append((inn, key))
+
+    auth = Keyed()
+    manager, _, _, _ = await type_in(INN, auth, **{INPUT: "inn", "s_receipts_login": "key"})
+    assert manager.dialog_data[INPUT] == "key"
+    manager, notices, _, message = await type_in("Bearer " + "k" * 40, auth, **manager.dialog_data)
+    assert keys == [(INN, "k" * 40)] and message.deleted
+    assert notices.sent == ["ntf-s-receipts.logged-in"]

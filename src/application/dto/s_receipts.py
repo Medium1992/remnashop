@@ -13,6 +13,12 @@ from src.core.enums import PurchaseType
 class NalogLogin(StrEnum):
     PASSWORD = "password"
     SMS = "sms"
+    # Logged in by hand in a browser (the cabinet asks for a captcha there);
+    # the bot only refreshes the session it was given.
+    BROWSER = "browser"
+    # An access key made in the cabinet for a counterparty: a long-lived
+    # token used as it is, with nothing to refresh.
+    KEY = "key"
 
 
 @dataclass(kw_only=True)
@@ -34,7 +40,11 @@ class NalogAccountDto:
 
     @property
     def logged_in(self) -> bool:
-        return bool(self.refresh_token) and self.lost_at is None
+        if self.lost_at is not None:
+            return False
+        if self.method == NalogLogin.KEY:
+            return bool(self.token)
+        return bool(self.refresh_token)
 
 
 class ReceiptStatus(StrEnum):
