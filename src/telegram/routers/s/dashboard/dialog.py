@@ -131,6 +131,7 @@ main = Window(
             state=SDashboard.BONUS,
         )
     ),
+    Row(_toggle("kept_enabled")),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(SwitchTo(I18nFormat("btn-s.texts"), id="texts", state=SDashboard.TEXTS)),
     Row(

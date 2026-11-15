@@ -117,6 +117,14 @@ class BonusDaysSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class KeptLimitsSettingsDto(TrackableMixin):
+    """Devices, traffic and squads an admin set by hand survive a renewal, when
+    the admin chose so for that subscription; a plan change resets them."""
+
+    enabled: bool = False
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
@@ -128,6 +136,7 @@ class SSettingsDto(TrackableMixin):
     rules: RulesTextSettingsDto = field(default_factory=RulesTextSettingsDto)
     connect: ConnectPageSettingsDto = field(default_factory=ConnectPageSettingsDto)
     bonus: BonusDaysSettingsDto = field(default_factory=BonusDaysSettingsDto)
+    kept: KeptLimitsSettingsDto = field(default_factory=KeptLimitsSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

@@ -39,6 +39,7 @@ NUMERIC = """
     checked must free amount s_left_days s_left_value s_full_amount s_limit s_count s_must
     s_traffic s_traffic_left s_traffic_limit s_keep connect_page connectable
     bonus_enabled bonus_plan_set s_bonus_days s_bonus_plan_set days total chosen active
+    kept kept_enabled s_kept_devices s_kept_traffic s_kept_squads
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title

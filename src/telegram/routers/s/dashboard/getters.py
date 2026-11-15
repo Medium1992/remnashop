@@ -80,6 +80,7 @@ async def s_getter(
         "plans_calendar": int(s.plans.calendar_months),
         "connect_page": int(s.connect.enabled),
         "bonus_enabled": int(s.bonus.enabled),
+        "kept_enabled": int(s.kept.enabled),
         "kind": dialog_manager.dialog_data.get("s_kind", "stale"),
     }
 

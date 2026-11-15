@@ -366,9 +366,28 @@ class Users:
         pass
 
 
-async def purchase(change: Optional[PlanChangeDto], has_trial: bool = False) -> tuple[Panel, Any]:
+class Kept:
+    """Nothing kept; records the subscriptions a change replaced."""
+
+    def __init__(self) -> None:
+        self.replaced: list[SubscriptionDto] = []
+
+    async def dropped(self, user: Any, old: SubscriptionDto) -> None:
+        self.replaced.append(old)
+
+
+async def purchase(
+    change: Optional[PlanChangeDto], has_trial: bool = False, kept: Optional[Kept] = None
+) -> tuple[Panel, Any]:
     panel, subs = Panel(), Subscriptions()
-    use_case = PurchaseSubscription(Uow(), Users(), subs, panel, None)  # type: ignore[arg-type]
+    use_case = PurchaseSubscription(
+        Uow(),  # type: ignore[arg-type]
+        Users(),  # type: ignore[arg-type]
+        subs,  # type: ignore[arg-type]
+        panel,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        kept or Kept(),  # type: ignore[arg-type]
+    )
     current = subscription(25, is_trial=has_trial)
     transaction = paid("250", plan_id=2, change=change)
     transaction.purchase_type = PurchaseType.CHANGE
@@ -402,6 +421,11 @@ class TestApplied:
         change = PlanChangeDto(mode=ChangeMode.KEEP_EXPIRY, drop_hwids=["h1"])
         panel, _ = await purchase(change, has_trial=True)
         assert panel.calls == [("update", 30)]
+
+    async def test_the_replaced_subscription_is_told_to_the_kept_values(self) -> None:
+        kept = Kept()
+        _, (old, _) = await purchase(None, kept=kept)
+        assert kept.replaced == [old]
 
 
 # ── in the dialog ────────────────────────────────────────────────────────────

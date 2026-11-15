@@ -42,6 +42,7 @@ TOGGLE_FIELDS: Final[frozenset[str]] = frozenset(
         "plans.calendar_months",
         "connect.enabled",
         "bonus.enabled",
+        "kept.enabled",
     }
 )
 

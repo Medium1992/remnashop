@@ -10,6 +10,7 @@ from conftest import PanelStub, user_payload
 from test_s_slots import FakeRedis, FakeSettingsDao, a_client
 from test_service_end_to_end import a_plan, a_subscription, a_user
 
+from src.application.dto.s_kept import KeptLimitsDto
 from src.application.use_cases.subscription.commands.purchase import (
     PurchaseSubscription,
     PurchaseSubscriptionDto,
@@ -165,6 +166,11 @@ class FakeUserDao:
         pass
 
 
+class NothingKept:
+    async def of(self, subscription: Any) -> KeptLimitsDto:
+        return KeptLimitsDto()
+
+
 async def renew(subscription_expiry: datetime, duration: int, on: bool) -> datetime:
     panel = RecordingPanel()
     purchase = PurchaseSubscription(
@@ -173,6 +179,7 @@ async def renew(subscription_expiry: datetime, duration: int, on: bool) -> datet
         FakeSubscriptionDao(),  # type: ignore[arg-type]
         panel,  # type: ignore[arg-type]
         calendar(on),  # type: ignore[arg-type]
+        NothingKept(),  # type: ignore[arg-type]
     )
     plan = a_plan(duration=duration)
     transaction = SimpleNamespace(id=1, plan_snapshot=plan, purchase_type=PurchaseType.RENEW)

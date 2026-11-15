@@ -10,6 +10,8 @@ from src.telegram.keyboards import back_main_menu_button
 from src.telegram.routers.dashboard.broadcast.handlers import on_content_input, on_preview
 from src.telegram.routers.s.block.dialog import start_block_dialog as s_start_block_dialog
 from src.telegram.routers.s.give_days import on_give_days_input as s_on_give_days_input
+from src.telegram.routers.s.kept import kept_admin_getter as s_kept_getter
+from src.telegram.routers.s.kept import kept_toggle as s_kept_toggle
 from src.telegram.states import DashboardRemnashop, DashboardUser
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import (
@@ -208,6 +210,7 @@ user = Window(
 subscription = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-user-subscription-info"),
+    I18nFormat("msg-s-kept.card", F["s_kept_any"]),
     Row(
         SwitchTo(
             text=I18nFormat("btn-user.subscription-traffic-limit"),
@@ -283,7 +286,7 @@ subscription = Window(
     ),
     IgnoreUpdate(),
     state=DashboardUser.SUBSCRIPTION,
-    getter=subscription_getter,
+    getter=[subscription_getter, s_kept_getter],
 )
 
 traffic_limit = Window(
@@ -300,6 +303,7 @@ traffic_limit = Window(
         ),
         width=3,
     ),
+    s_kept_toggle("traffic"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back.general"),
@@ -310,7 +314,7 @@ traffic_limit = Window(
     MessageInput(func=on_traffic_limit_input),
     IgnoreUpdate(),
     state=DashboardUser.TRAFFIC_LIMIT,
-    getter=traffic_limit_getter,
+    getter=[traffic_limit_getter, s_kept_getter],
 )
 
 device_limit = Window(
@@ -327,6 +331,7 @@ device_limit = Window(
         ),
         width=3,
     ),
+    s_kept_toggle("devices"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back.general"),
@@ -337,7 +342,7 @@ device_limit = Window(
     MessageInput(func=on_device_limit_input),
     IgnoreUpdate(),
     state=DashboardUser.DEVICE_LIMIT,
-    getter=device_limit_getter,
+    getter=[device_limit_getter, s_kept_getter],
 )
 
 expire_time = Window(
@@ -384,6 +389,7 @@ squads = Window(
             state=DashboardUser.EXTERNAL_SQUADS,
         ),
     ),
+    s_kept_toggle("squads"),
     Row(
         SwitchTo(
             text=I18nFormat("btn-back.general"),
@@ -393,7 +399,7 @@ squads = Window(
     ),
     IgnoreUpdate(),
     state=DashboardUser.SQUADS,
-    getter=squads_getter,
+    getter=[squads_getter, s_kept_getter],
 )
 
 internal_squads = Window(

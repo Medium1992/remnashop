@@ -8,6 +8,7 @@ from magic_filter import F
 from src.core.constants import PAYMENT_PREFIX
 from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
 from src.telegram.keyboards import back_main_menu_button, connect_buttons
+from src.telegram.routers.s.kept import kept_user_getter as s_kept_user_getter
 from src.telegram.routers.s.plan_change_windows import change_devices, change_mode
 from src.telegram.states import Subscription
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -37,6 +38,7 @@ subscription = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-main"),
     Format("\n{s_inactive}", when=F["s_inactive"]),
+    I18nFormat("msg-s-kept.user", F["s_kept_any"]),
     Row(
         Button(
             text=I18nFormat("btn-subscription.new"),
@@ -67,7 +69,7 @@ subscription = Window(
     *back_main_menu_button,
     IgnoreUpdate(),
     state=Subscription.MAIN,
-    getter=subscription_getter,
+    getter=[subscription_getter, s_kept_user_getter],
 )
 
 plan = Window(

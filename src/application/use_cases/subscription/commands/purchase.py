@@ -10,6 +10,7 @@ from src.application.common.uow import UnitOfWork
 from src.application.dto import PlanSnapshotDto, SubscriptionDto, TransactionDto, UserDto
 from src.application.dto.s_plan_change import ChangeMode
 from src.application.events import TrialActivatedEvent
+from src.application.services.s_kept import KeptLimits, renew_from_plan
 from src.application.services.s_plan_change import drop_devices, kept_subscription
 from src.core.enums import PurchaseType, SubscriptionStatus
 from src.core.exceptions import TrialNotAvailableError
@@ -118,12 +119,14 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
         subscription_dao: SubscriptionDao,
         remnawave: Remnawave,
         settings_dao: SettingsDao,
+        kept_limits: KeptLimits,
     ) -> None:
         self.uow = uow
         self.user_dao = user_dao
         self.subscription_dao = subscription_dao
         self.remnawave = remnawave
         self.settings_dao = settings_dao
+        self.kept_limits = kept_limits
 
     async def _execute(self, actor: UserDto, data: PurchaseSubscriptionDto) -> None:  # noqa: C901
         user = data.user
@@ -178,12 +181,8 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                         new_expire = add_term(base_date, duration)
 
                 subscription.expire_at = new_expire
-                subscription.device_limit = plan.device_limit
-                subscription.traffic_limit = plan.traffic_limit
-                subscription.traffic_limit_strategy = plan.traffic_limit_strategy
-                subscription.tag = plan.tag
-                subscription.internal_squads = plan.internal_squads
-                subscription.external_squad = plan.external_squad
+                # s edition: what an admin kept by hand stays (docs/s/README.md).
+                renew_from_plan(subscription, plan, await self.kept_limits.of(subscription))
 
                 await self.remnawave.update_user(
                     user=user,
@@ -246,6 +245,8 @@ class PurchaseSubscription(Interactor[PurchaseSubscriptionDto, None]):
                     await self.user_dao.update(user)
                 await self.uow.commit()
                 logger.debug(f"{actor.log} Changed subscription for user '{user.id}'")
+                # s edition: the new plan keeps nothing; the admins are told.
+                await self.kept_limits.dropped(user, subscription)
 
             else:
                 raise ValueError(

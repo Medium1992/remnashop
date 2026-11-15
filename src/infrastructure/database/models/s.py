@@ -10,7 +10,7 @@ metadata cannot resolve them.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -29,3 +29,18 @@ class SUserBlock(SBase):
     until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SKeptLimits(SBase):
+    """Which hand-set values of a subscription stay on renewal; a plan change
+    makes a new subscription, so they go with it."""
+
+    __tablename__ = "s_kept_limits"
+
+    subscription_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    devices: Mapped[bool] = mapped_column(Boolean, default=False)
+    traffic: Mapped[bool] = mapped_column(Boolean, default=False)
+    squads: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
