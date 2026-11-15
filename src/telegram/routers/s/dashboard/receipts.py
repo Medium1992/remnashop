@@ -29,6 +29,7 @@ from src.infrastructure.services.s.nalog_auth import (
     is_payer_inn,
     normalize_proxy,
 )
+from src.infrastructure.services.s.receipt_import import ImportPlan
 from src.infrastructure.services.s.receipts import Receipts
 from src.telegram.s_states import SDashboard
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
@@ -41,6 +42,10 @@ LOGIN_INN: Final[str] = "s_receipts_inn"
 LOGIN_PHONE: Final[str] = "s_receipts_phone"
 CHALLENGE: Final[str] = "s_receipts_challenge"
 LOGIN_DEVICE: Final[str] = "s_receipts_device"
+IMPORT_SINCE: Final[str] = "s_receipts_import_since"
+IMPORT_KEYS: Final[str] = "s_receipts_import_keys"
+IMPORT_VIEW: Final[str] = "s_receipts_import_view"
+IMPORT_SHOWN: Final[int] = 20
 LIST_KIND: Final[str] = "s_receipts_list"  # "unissued", "undelivered" or a user id
 ITEM: Final[str] = "s_receipts_item"
 
@@ -292,6 +297,19 @@ async def _handle_input(  # noqa: C901
             raise _RefusedError("date-invalid") from e
         return "ntf-s-receipts.added", {"count": await receipts.add_since(day)}
 
+    if kind == "import":
+        try:
+            day = datetime.strptime(text, "%d.%m.%Y").replace(tzinfo=MOSCOW)
+        except ValueError as e:
+            raise _RefusedError("date-invalid") from e
+        plan = await receipts.import_plan(day)
+        data[IMPORT_SINCE] = day.isoformat()
+        data[IMPORT_KEYS] = [pair.key for pair in plan.pairs]
+        data[IMPORT_VIEW] = _import_view(plan)
+        data.pop(INPUT, None)
+        await dialog_manager.switch_to(SDashboard.RECEIPTS_IMPORT)
+        return None
+
     if kind == "find":
         found = None
         if text.lstrip("-").isdigit():
@@ -324,6 +342,63 @@ async def _handle_input(  # noqa: C901
         return None
 
     raise _RefusedError("changed")
+
+
+# -- receipts made by hand ------------------------------------------------------
+
+
+def _import_view(plan: ImportPlan) -> dict[str, Any]:
+    """What the preview shows, kept in the dialog until confirmed."""
+    lines = [
+        f"{pair.income.amount} ₽: оплата {moscow(pair.payment['paid_at'])} ↔ "
+        f"чек {pair.income.receipt_uuid} {moscow(pair.income.operation_time)}"
+        for pair in plan.pairs[:IMPORT_SHOWN]
+    ]
+    return {
+        "paired": len(plan.pairs),
+        "paired_amount": str(plan.paired_amount),
+        "lone_payments": len(plan.lone_payments),
+        "lone_payments_amount": str(plan.lone_payments_amount),
+        "lone_incomes": len(plan.lone_incomes),
+        "lone_incomes_amount": str(plan.lone_incomes_amount),
+        "lines": "\n".join(lines),
+        "more": max(len(plan.pairs) - IMPORT_SHOWN, 0),
+    }
+
+
+async def import_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
+    view = dict(dialog_manager.dialog_data.get(IMPORT_VIEW) or {})
+    view.setdefault("paired", 0)
+    view["lines"] = html.escape(str(view.get("lines", "")))
+    return view
+
+
+@inject
+async def on_import_confirm(
+    callback: CallbackQuery,
+    widget: Any,
+    dialog_manager: DialogManager,
+    receipts: FromDishka[Receipts],
+    notifier: FromDishka[Notifier],
+) -> None:
+    if not _allowed(dialog_manager):
+        return
+    data = dialog_manager.dialog_data
+    user = _actor(dialog_manager)
+    since = data.get(IMPORT_SINCE)
+    keys = set(data.get(IMPORT_KEYS) or [])
+    if not since or not keys:
+        return
+    try:
+        added = await receipts.apply_import(datetime.fromisoformat(since), keys)
+    except Exception as error:
+        logger.exception(f"{user.log} Receipts made by hand not tied")
+        await _tell(notifier, user, "ntf-s-receipts.cabinet", reason=html.escape(str(error)))
+        return
+    for key in (IMPORT_SINCE, IMPORT_KEYS, IMPORT_VIEW):
+        data.pop(key, None)
+    await dialog_manager.switch_to(SDashboard.RECEIPTS)
+    await _tell(notifier, user, "ntf-s-receipts.imported", count=added)
 
 
 # -- the list and one receipt --------------------------------------------------
@@ -498,6 +573,7 @@ receipts_main = Window(
             on_click=on_list,
         ),
     ),
+    Row(Button(I18nFormat("btn-s-receipts.import"), id="r_ask_import", on_click=on_ask)),
     Row(
         Button(I18nFormat("btn-s-receipts.find"), id="r_ask_find", on_click=on_ask),
         Button(I18nFormat("btn-s-receipts.since"), id="r_ask_since", on_click=on_ask),
@@ -524,6 +600,23 @@ receipts_input = Window(
     IgnoreUpdate(),
     state=SDashboard.RECEIPTS_INPUT,
     getter=input_getter,
+)
+
+receipts_import = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-receipts.import"),
+    Row(
+        Button(
+            I18nFormat("btn-s-receipts.import-confirm", count=F["paired"]),
+            id="r_import_confirm",
+            on_click=on_import_confirm,
+            when=F["paired"],
+        )
+    ),
+    Row(SwitchTo(I18nFormat("btn-back.general"), id="back", state=SDashboard.RECEIPTS)),
+    IgnoreUpdate(),
+    state=SDashboard.RECEIPTS_IMPORT,
+    getter=import_getter,
 )
 
 receipts_list = Window(

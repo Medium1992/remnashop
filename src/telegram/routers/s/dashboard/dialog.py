@@ -42,7 +42,13 @@ from .handlers import (
     on_target_input,
     on_toggle,
 )
-from .receipts import receipts_input, receipts_item, receipts_list, receipts_main
+from .receipts import (
+    receipts_import,
+    receipts_input,
+    receipts_item,
+    receipts_list,
+    receipts_main,
+)
 from .texts import (
     on_text_default,
     on_text_input,
@@ -464,4 +470,5 @@ router = Dialog(
     receipts_input,
     receipts_list,
     receipts_item,
+    receipts_import,
 )

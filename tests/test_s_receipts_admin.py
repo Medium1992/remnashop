@@ -22,10 +22,20 @@ from src.infrastructure.services.s.nalog import (
     ReceiptFile,
 )
 from src.infrastructure.services.s.nalog_auth import NalogAuth, is_payer_inn
+from src.infrastructure.services.s.receipt_import import ImportPair, ImportPlan
 from src.infrastructure.services.s.receipts import Receipts, parse_receipt_uuid
-from src.telegram.routers.s.dashboard.receipts import INPUT, ITEM, LOGIN_INN, on_input, on_new_code
+from src.telegram.routers.s.dashboard.receipts import (
+    IMPORT_KEYS,
+    INPUT,
+    ITEM,
+    LOGIN_INN,
+    on_import_confirm,
+    on_input,
+    on_new_code,
+)
 from src.telegram.routers.s.receipts import on_receipt
 from src.telegram.s_states import SDashboard
+from tests.test_s_receipt_import import at, income, payment
 from tests.test_s_receipts import (
     INN,
     Cabinet,
@@ -74,6 +84,7 @@ class TestAdminActions:
         receipts.get = _getter(dao)  # type: ignore[method-assign]
         await receipts.reissue_to_organisation(1, "7707083893", "ООО Ромашка")
         assert cabinet.canceled == [("u1", CANCEL_WRONG)]
+        assert cabinet.clients == [("7707083893", "ООО Ромашка")]
         row = dao.rows[1]
         assert (row.receipt_uuid, row.client_inn, row.status) == (
             "u2",
@@ -390,3 +401,28 @@ async def test_login_with_an_access_key() -> None:
     manager, notices, _, message = await type_in("Bearer " + "k" * 40, auth, **manager.dialog_data)
     assert keys == [(INN, "k" * 40)] and message.deleted
     assert notices.sent == ["ntf-s-receipts.logged-in"]
+
+
+async def test_import_shows_a_preview_then_ties_what_was_shown() -> None:
+    pair = ImportPair(payment=payment(250, at(9)), income=income(250, at(11)))
+    applied: list[tuple[datetime, set[str]]] = []
+
+    async def import_plan(day: datetime) -> ImportPlan:
+        return ImportPlan(pairs=[pair], lone_payments=[payment(500, at(9))], inn=INN)
+
+    async def apply_import(day: datetime, keys: set[str]) -> int:
+        applied.append((day, keys))
+        return 1
+
+    receipts = SimpleNamespace(import_plan=import_plan, apply_import=apply_import)
+    manager, _, _, _ = await type_in("15.11.2026", receipts=receipts, **{INPUT: "import"})
+    assert manager.state == SDashboard.RECEIPTS_IMPORT
+    view = manager.dialog_data["s_receipts_import_view"]
+    assert (view["paired"], view["lone_payments"], view["lone_payments_amount"]) == (1, 1, "500")
+    assert "↔ чек" in view["lines"] and manager.dialog_data[IMPORT_KEYS] == [pair.key]
+
+    notices = Notices()
+    confirm = Manager({Receipts: receipts, Notifier: notices}, **manager.dialog_data)
+    await on_import_confirm(None, None, confirm)  # type: ignore[arg-type]
+    assert applied and applied[0][1] == {pair.key}
+    assert notices.sent == ["ntf-s-receipts.imported"] and confirm.state == SDashboard.RECEIPTS

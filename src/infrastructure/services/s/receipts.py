@@ -54,12 +54,14 @@ from .nalog import (
     NalogAuthError,
     NalogClient,
     NalogError,
+    NalogForbiddenError,
     NalogUnknownError,
     NalogUnreachableError,
     ReceiptFile,
     receipt_url,
 )
 from .nalog_auth import NalogAuth, NalogLoginLostError, NalogNotLoggedInError
+from .receipt_import import ImportPlan, match, usable
 
 # Minutes to wait after each failed try while the cabinet is away.
 BACKOFF_MINUTES: Final[tuple[int, ...]] = (1, 5, 15, 30, 60, 120, 240, 480)
@@ -229,9 +231,17 @@ class Receipts:
         attempts = receipt.attempts + 1
 
         try:
-            receipt_uuid = await client.create_income(token, name, receipt.amount, receipt.paid_at)
-        except NalogAuthError as e:
-            # Refused before anything was done; the token goes, the row waits.
+            receipt_uuid = await client.create_income(
+                token,
+                name,
+                receipt.amount,
+                receipt.paid_at,
+                client_inn=receipt.client_inn,
+                client_name=receipt.client_name,
+            )
+        except (NalogAuthError, NalogForbiddenError) as e:
+            # Refused before anything was done (no login, or no right to
+            # register incomes: an access key may only read); the row waits.
             await self._back_to_queue(receipt, attempts - 1, short(e))
             try:
                 await self.auth.forget_token(short(e))
@@ -499,6 +509,39 @@ class Receipts:
         logger.info(f"Receipts: {added} earlier payments queued, from {since}")
         if added:
             await self.run()
+        return added
+
+    async def import_plan(self, since: datetime) -> ImportPlan:
+        """Receipts made by hand since ``since`` paired with payments that have
+        none in the bot; nothing is written."""
+        client, token, inn = await self.auth.session()
+        until = datetime_now()
+        incomes = await client.list_incomes(token, since, until)
+        async with self.uow:
+            known = await self.receipt_dao.known_uuids([i.receipt_uuid for i in incomes])
+            payments = await self.receipt_dao.unreceipted(since, until, limit=5000)
+        plan = match(payments, usable(incomes, known))
+        plan.inn = inn
+        return plan
+
+    async def apply_import(self, since: datetime, keys: set[str]) -> int:
+        """Ties the pairs shown to the admin (``keys``), worked out again so
+        that nothing changed since is tied blindly. Nothing goes to anyone."""
+        plan = await self.import_plan(since)
+        rows = [
+            {
+                **pair.payment,
+                "receipt_uuid": pair.income.receipt_uuid,
+                "inn": plan.inn,
+                "name": pair.income.name[:256],
+            }
+            for pair in plan.pairs
+            if pair.key in keys
+        ]
+        async with self.uow:
+            added = await self.receipt_dao.add_issued(rows)
+            await self.uow.commit()
+        logger.info(f"Receipts: {added} made by hand tied to their payments, from {since}")
         return added
 
     # -- admins -------------------------------------------------------------

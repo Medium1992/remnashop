@@ -25,6 +25,7 @@ from src.infrastructure.services.s.nalog import (
     CANCEL_REFUND,
     NalogAuthError,
     NalogError,
+    NalogForbiddenError,
     NalogUnknownError,
     NalogUnreachableError,
     ReceiptFile,
@@ -154,12 +155,20 @@ class Cabinet:
         self.file = file if file is not None else ReceiptFile(b"\x89PNG", "image/png")
         self.cancel = cancel
         self.incomes: list[tuple[str, Decimal, datetime]] = []
+        self.clients: list[tuple[Optional[str], Optional[str]]] = []
         self.canceled: list[tuple[str, str]] = []
 
     async def create_income(
-        self, token: str, name: str, amount: Decimal, operation_time: datetime
+        self,
+        token: str,
+        name: str,
+        amount: Decimal,
+        operation_time: datetime,
+        client_inn: Optional[str] = None,
+        client_name: Optional[str] = None,
     ) -> str:
         self.incomes.append((name, amount, operation_time))
+        self.clients.append((client_inn, client_name))
         if isinstance(self.income, Exception):
             raise self.income
         return str(self.income)
@@ -582,3 +591,16 @@ async def test_a_refused_access_key_tells_the_admins() -> None:
     await receipts.run()
     assert status(dao) == ReceiptStatus.PENDING
     assert notifier.sent[0][0] == "event-s-receipts.login-lost"
+
+
+async def test_no_right_to_register_waits_and_tells_once() -> None:
+    class KeyAuth(Auth):
+        async def forget_token(self, reason: str = "") -> None:
+            raise NalogLoginLostError(f"the access key was refused: {reason}")
+
+    dao = FakeReceipts(receipt())
+    forbidden = NalogForbiddenError("Нет прав", "access.denied", 403)
+    receipts, notifier = service(dao, auth=KeyAuth(Cabinet(income=forbidden)))
+    await receipts.run()
+    assert status(dao) == ReceiptStatus.PENDING and dao.rows[1].attempts == 0
+    assert [key for key, _ in notifier.sent] == ["event-s-receipts.login-lost"]

@@ -23,6 +23,7 @@ from src.infrastructure.services.s.nalog import (
     NalogAuthError,
     NalogClient,
     NalogError,
+    NalogForbiddenError,
     NalogUnknownError,
     NalogUnreachableError,
     cabinet_time,
@@ -207,6 +208,12 @@ class TestClient:
         with pytest.raises(NalogError, match="лимит") as caught:
             await client.create_income("T1", "x", Decimal(1), datetime_now())
         assert type(caught.value) is NalogError
+
+    async def test_no_right_is_its_own_error(self, cabinet: tuple[Cabinet, NalogClient]) -> None:
+        fake, client = cabinet
+        fake.answer("/api/v1/income", status=403, body={"message": "Нет прав"})
+        with pytest.raises(NalogForbiddenError):
+            await client.create_income("T1", "x", Decimal(1), datetime_now())
 
     async def test_an_expired_token_is_a_login_error(
         self, cabinet: tuple[Cabinet, NalogClient]
@@ -408,16 +415,23 @@ def crypto() -> CryptographerImpl:
 
 
 async def test_secrets_are_stored_encrypted() -> None:
+    # Long, distinct values: a short one ("T0") turns up in random ciphertext.
+    secrets = {
+        "password": "pass-word-1234567",
+        "refresh_token": "refresh-token-abcdefgh",
+        "token": "access-token-ijklmnop",
+        "phone": "79001234567",
+        "proxy": "socks5://user:pw@proxy-host:1080",
+    }
     session, cryptographer = Captured(), crypto()
     dao = NalogAccountDao(session, cryptographer)  # type: ignore[arg-type]
-    account = logged_in(phone="79001234567", proxy="socks5://u:p@h:1")
-    await dao.save(account)
+    await dao.save(replace(logged_in(), **secrets))
     params = session.statements[0].compile(dialect=postgresql.dialect()).params
     stored_text = json.dumps({k: str(v) for k, v in params.items()})
-    for secret in ("secret", "R1", "T0", "79001234567", "u:p@h"):
-        assert secret not in stored_text
+    for name, value in secrets.items():
+        assert value not in stored_text
+        assert params[name] != value and cryptographer.decrypt(params[name]) == value
     assert params["inn"] == INN
-    assert cryptographer.decrypt(params["password"]) == "secret"
     assert dao._open(dao._close("R1")) == "R1" and dao._close(None) is None
 
 

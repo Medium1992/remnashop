@@ -10,6 +10,7 @@ receipt matters most, so the errors say it:
 
 - ``NalogAuthError``: the login is gone (or was wrong); nothing will work
   until someone logs in again.
+- ``NalogForbiddenError``: the login works but has no right to do this.
 - ``NalogUnreachableError``: the request never reached the cabinet, or the cabinet
   turned it away before doing anything; trying again is safe.
 - ``NalogUnknownError``: the request went out and no clear answer came back. An
@@ -76,6 +77,10 @@ class NalogAuthError(NalogError):
     pass
 
 
+class NalogForbiddenError(NalogError):
+    """The login works but may not do this (an access key that only reads)."""
+
+
 class NalogUnreachableError(NalogError):
     pass
 
@@ -90,6 +95,18 @@ class NalogSession:
     expires_at: datetime
     refresh_token: str = field(repr=False)
     inn: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CabinetIncome:
+    """A receipt as the cabinet lists it."""
+
+    receipt_uuid: str
+    amount: Decimal
+    operation_time: datetime
+    name: str
+    from_individual: bool
+    canceled: bool
 
 
 @dataclass(frozen=True)
@@ -140,6 +157,18 @@ def normalize_phone(phone: str) -> str:
 def receipt_url(inn: str, receipt_uuid: str) -> str:
     """The receipt as the tax service shows it; anyone with the link can open it."""
     return f"{BASE_URL}/v1/receipt/{inn}/{receipt_uuid}/print"
+
+
+def _income(item: dict[str, Any]) -> CabinetIncome:
+    moment = datetime.fromisoformat(str(item.get("operationTime")))
+    return CabinetIncome(
+        receipt_uuid=str(item.get("approvedReceiptUuid") or ""),
+        amount=money(Decimal(str(item.get("totalAmount") or 0))),
+        operation_time=moment if moment.tzinfo else moment.replace(tzinfo=MOSCOW),
+        name=str(item.get("name") or ""),
+        from_individual=item.get("incomeType") == "FROM_INDIVIDUAL",
+        canceled=item.get("cancellationInfo") is not None,
+    )
 
 
 def token_expiry(token: str) -> Optional[datetime]:
@@ -226,19 +255,7 @@ class NalogClient:
 
     async def profile(self, token: str) -> dict[str, Any]:
         """The taxpayer the token opens; checks that a token works."""
-        async with self._session_http() as http:
-            try:
-                async with http.get(
-                    self.base_url + "/v1/user", headers=self._headers(token)
-                ) as response:
-                    content = await response.read()
-                    if response.status != 200:
-                        raise self._error(response.status, content)
-                    return self._json(content)
-            except NalogError:
-                raise
-            except (*_NOT_CONNECTED, aiohttp.ClientError, TimeoutError) as e:
-                raise NalogUnreachableError(f"{type(e).__name__}: {e}", "network") from e
+        return await self._get_json("/v1/user", token)
 
     # -- incomes ------------------------------------------------------------
 
@@ -286,6 +303,47 @@ class NalogClient:
             # Went through and came back with no receipt: not clear what happened.
             raise NalogUnknownError("No receipt in the answer", "bad.answer")
         return receipt_uuid
+
+    async def list_incomes(
+        self, token: str, since: datetime, until: datetime, page: int = 50, cap: int = 5000
+    ) -> list[CabinetIncome]:
+        """Every receipt registered in the period, oldest first."""
+        incomes: list[CabinetIncome] = []
+        offset = 0
+        while offset < cap:
+            params = {
+                "from": cabinet_time(since),
+                "to": cabinet_time(until),
+                "offset": str(offset),
+                "sortBy": "operation_time:asc",
+                "limit": str(page),
+            }
+            data = await self._get_json("/v1/incomes", token, params)
+            content = data.get("content")
+            if not isinstance(content, list):
+                raise NalogError("No list of incomes in the answer", "bad.answer", 200)
+            incomes.extend(_income(item) for item in content if isinstance(item, dict))
+            if not data.get("hasMore") or not content:
+                break
+            offset += len(content)
+        return sorted(incomes, key=lambda income: income.operation_time)
+
+    async def _get_json(
+        self, path: str, token: str, params: Optional[dict[str, str]] = None
+    ) -> dict[str, Any]:
+        async with self._session_http() as http:
+            try:
+                async with http.get(
+                    self.base_url + path, headers=self._headers(token), params=params
+                ) as response:
+                    content = await response.read()
+                    if response.status != 200:
+                        raise self._error(response.status, content)
+                    return self._json(content)
+            except NalogError:
+                raise
+            except (*_NOT_CONNECTED, aiohttp.ClientError, TimeoutError) as e:
+                raise NalogUnreachableError(f"{type(e).__name__}: {e}", "network") from e
 
     async def cancel_income(
         self,
@@ -400,6 +458,8 @@ class NalogClient:
 
         if status == 401 or code.startswith("authentication"):
             return NalogAuthError(message or "Unauthorized", code, status)
+        if status == 403:
+            return NalogForbiddenError(message or "Forbidden", code, status)
         if status in _NOT_REACHED_STATUSES:
             return NalogUnreachableError(message or "Service unavailable", code, status)
         if status >= 500 and sends_income:

@@ -132,9 +132,11 @@ class ReceiptDao:
     def _select(self) -> Select[tuple[SReceipt]]:
         return select(SReceipt).execution_options(populate_existing=True)
 
-    async def enqueue_paid(self, since: datetime, until: Optional[datetime] = None) -> int:
-        """Rows for real-money (rouble) payments completed since ``since`` that
-        have none yet; how many were added."""
+    async def unreceipted(
+        self, since: datetime, until: Optional[datetime] = None, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        """Real-money (rouble) payments completed in the period that have no
+        receipt row yet, oldest first, as ``s_receipts`` values."""
         known = select(SReceipt.payment_id)
         stmt = (
             select(Transaction)
@@ -146,7 +148,7 @@ class ReceiptDao:
                 Transaction.payment_id.not_in(known),
             )
             .order_by(Transaction.updated_at)
-            .limit(500)
+            .limit(limit)
         )
         if until is not None:
             stmt = stmt.where(Transaction.updated_at < until)
@@ -163,14 +165,41 @@ class ReceiptDao:
                     "paid_at": transaction.updated_at,
                     "purchase_type": PurchaseType(transaction.purchase_type).value,
                     "duration": int(transaction.plan_snapshot.get("duration") or 0),
-                    "status": ReceiptStatus.PENDING.value,
                 }
             )
+        return rows
+
+    async def enqueue_paid(self, since: datetime, until: Optional[datetime] = None) -> int:
+        """Rows for real-money (rouble) payments completed since ``since`` that
+        have none yet; how many were added."""
+        rows = [
+            {**row, "status": ReceiptStatus.PENDING.value}
+            for row in await self.unreceipted(since, until)
+        ]
         if not rows:
             return 0
         result = await self.session.execute(
             insert(SReceipt)
             .values(rows)
+            .on_conflict_do_nothing(index_elements=[SReceipt.payment_id])
+            .returning(SReceipt.id)
+        )
+        return len(result.all())
+
+    async def known_uuids(self, uuids: Sequence[str]) -> set[str]:
+        if not uuids:
+            return set()
+        stmt = select(SReceipt.receipt_uuid).where(SReceipt.receipt_uuid.in_(list(uuids)))
+        return {uuid for uuid in await self.session.scalars(stmt) if uuid}
+
+    async def add_issued(self, rows: Sequence[dict[str, Any]]) -> int:
+        """Receipts made outside the bot, tied to their payments as issued;
+        a payment that has a row by now is left as it is."""
+        if not rows:
+            return 0
+        result = await self.session.execute(
+            insert(SReceipt)
+            .values([{**row, "status": ReceiptStatus.DELIVERED.value} for row in rows])
             .on_conflict_do_nothing(index_elements=[SReceipt.payment_id])
             .returning(SReceipt.id)
         )
