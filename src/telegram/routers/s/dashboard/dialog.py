@@ -48,6 +48,7 @@ from .receipts import (
     receipts_item,
     receipts_list,
     receipts_main,
+    receipts_users,
 )
 from .texts import (
     on_text_default,
@@ -471,4 +472,5 @@ router = Dialog(
     receipts_list,
     receipts_item,
     receipts_import,
+    receipts_users,
 )

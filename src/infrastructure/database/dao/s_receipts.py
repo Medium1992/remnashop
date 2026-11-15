@@ -283,6 +283,11 @@ class ReceiptDao:
         row = await self.session.scalar(self._select().where(SReceipt.id == receipt_id))
         return _dto(row) if row else None
 
+    async def by_uuid(self, receipt_uuid: str) -> Optional[ReceiptDto]:
+        stmt = self._select().where(SReceipt.receipt_uuid == receipt_uuid).limit(1)
+        row = await self.session.scalar(stmt)
+        return _dto(row) if row else None
+
     async def by_payment(self, payment_id: UUID) -> Optional[ReceiptDto]:
         row = await self.session.scalar(self._select().where(SReceipt.payment_id == payment_id))
         return _dto(row) if row else None

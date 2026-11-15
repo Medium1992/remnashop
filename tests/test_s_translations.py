@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 S_SOURCES = [
     *ROOT.glob("src/telegram/routers/s/**/*.py"),
     *ROOT.glob("src/telegram/routers/dashboard/users/user/dialog.py"),
+    *ROOT.glob("src/telegram/routers/s/user_card.py"),
     *ROOT.glob("src/infrastructure/services/s/*.py"),
 ]
 KEY_RE = re.compile(r"\"((?:btn|msg|ntf)-s[-\w]*\.[-\w]+)\"")
@@ -41,7 +42,7 @@ NUMERIC = """
     bonus_enabled bonus_plan_set s_bonus_days s_bonus_plan_set days total chosen active
     kept kept_enabled s_kept_devices s_kept_traffic s_kept_squads
     receipts_enabled logged_in lost proxy_set issued waiting unissued undelivered found
-    s_receipts s_receipts_on paired lone_payments lone_incomes more
+    s_receipts s_receipts_on paired lone_payments lone_incomes more from_card s_inviter
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title
@@ -50,7 +51,7 @@ TEXTUAL = """
     text_source text_variables detail rules subscription_url bonus_plan s_bonus_plan
     currency period s_currency s_keep_date_local s_today_period s_today_date_local s_plan
     lost_reason method inn unissued_amount undelivered_amount input buyer details lines
-    paired_amount lone_payments_amount lone_incomes_amount
+    paired_amount lone_payments_amount lone_incomes_amount who
 """
 ARGS: dict[str, Any] = {**dict.fromkeys(NUMERIC.split(), 1), **dict.fromkeys(TEXTUAL.split(), "x")}
 

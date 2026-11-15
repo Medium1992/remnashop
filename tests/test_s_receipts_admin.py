@@ -13,7 +13,8 @@ from src.application.common import Notifier, TranslatorRunner
 from src.application.common.dao import UserDao
 from src.application.dto import UserDto
 from src.application.dto.s_receipts import NalogAccountDto, ReceiptStatus
-from src.core.constants import USER_KEY
+from src.application.use_cases.user.queries.search import SearchUsers
+from src.core.constants import TARGET_USER_ID, USER_KEY
 from src.core.enums import Role
 from src.infrastructure.services.s.nalog import (
     CANCEL_WRONG,
@@ -29,9 +30,11 @@ from src.telegram.routers.s.dashboard.receipts import (
     INPUT,
     ITEM,
     LOGIN_INN,
+    on_found_user,
     on_import_confirm,
     on_input,
     on_new_code,
+    open_user_receipts,
 )
 from src.telegram.routers.s.receipts import on_receipt
 from src.telegram.s_states import SDashboard
@@ -167,6 +170,29 @@ class FakeAuth:
         self.proxy = proxy
 
 
+class Search:
+    """The admin's user search: Telegram ID 700, or "ив" for two people."""
+
+    async def __call__(self, actor: Any, data: Any) -> list[UserDto]:
+        query = (data.query or "").strip().removeprefix("@")
+        if query == "700" or data.forward_from_id == 700:
+            return [UserDto(id=7, telegram_id=700, name="Buyer", username="buyer")]
+        if query == "ив":
+            return [
+                UserDto(id=8, telegram_id=800, name="Иван", username="ivan"),
+                UserDto(id=9, telegram_id=900, name="Ивета"),
+            ]
+        return []
+
+
+class Finder:
+    def __init__(self, receipt_id: Optional[int] = None) -> None:
+        self.receipt_id = receipt_id
+
+    async def find(self, text: str) -> Any:
+        return SimpleNamespace(id=self.receipt_id) if self.receipt_id else None
+
+
 class Users:
     async def get_by_telegram_id(self, telegram_id: int) -> Optional[UserDto]:
         return UserDto(id=7, telegram_id=telegram_id, name="B") if telegram_id == 700 else None
@@ -193,6 +219,8 @@ class Message:
     def __init__(self, text: str) -> None:
         self.text = text
         self.deleted = False
+        self.forward_from: Any = None
+        self.forward_sender_name: Optional[str] = None
 
     async def delete(self) -> None:
         self.deleted = True
@@ -205,9 +233,10 @@ async def type_in(
     manager = Manager(
         {
             NalogAuth: auth,
-            Receipts: receipts or SimpleNamespace(),
+            Receipts: receipts or Finder(),
             UserDao: Users(),
             Notifier: notices,
+            SearchUsers: Search(),
         },
         **data,
     )
@@ -266,9 +295,26 @@ class TestInput:
         assert auth.proxy is None
 
     async def test_find_opens_the_users_list(self) -> None:
+        manager, _, _, _ = await type_in("@buyer700", **{INPUT: "find"})
+        assert manager.state is None
         manager, _, _, _ = await type_in("700", **{INPUT: "find"})
         assert manager.state == SDashboard.RECEIPTS_LIST
         assert manager.dialog_data["s_receipts_list"] == "7"
+
+    async def test_several_found_are_offered_to_choose(self) -> None:
+        manager, _, _, _ = await type_in("ив", **{INPUT: "find"})
+        assert manager.state == SDashboard.RECEIPTS_USERS
+        assert manager.dialog_data["s_receipts_found"] == [
+            {"id": 8, "label": "Иван @ivan"},
+            {"id": 9, "label": "Ивета"},
+        ]
+        await on_found_user(None, None, manager, "9")  # type: ignore[arg-type]
+        assert manager.state == SDashboard.RECEIPTS_LIST
+        assert manager.dialog_data["s_receipts_list"] == "9"
+
+    async def test_a_receipt_number_opens_the_receipt(self) -> None:
+        manager, _, _, _ = await type_in("200f7gdedv", receipts=Finder(5), **{INPUT: "find"})
+        assert manager.state == SDashboard.RECEIPTS_ITEM and manager.dialog_data[ITEM] == 5
 
     async def test_payments_from_a_date(self) -> None:
         days: list[datetime] = []
@@ -335,7 +381,13 @@ class TestMyReceipts:
 async def test_without_the_permission_nothing_is_done() -> None:
     notices, auth = Notices(), FakeAuth()
     manager = Manager(
-        {NalogAuth: auth, Receipts: SimpleNamespace(), UserDao: Users(), Notifier: notices}
+        {
+            NalogAuth: auth,
+            Receipts: SimpleNamespace(),
+            UserDao: Users(),
+            Notifier: notices,
+            SearchUsers: Search(),
+        }
     )
     manager.middleware_data[USER_KEY] = UserDto(id=2, telegram_id=2, name="A", role=Role.ADMIN)
     manager.dialog_data[INPUT] = "proxy"
@@ -426,3 +478,18 @@ async def test_import_shows_a_preview_then_ties_what_was_shown() -> None:
     await on_import_confirm(None, None, confirm)  # type: ignore[arg-type]
     assert applied and applied[0][1] == {pair.key}
     assert notices.sent == ["ntf-s-receipts.imported"] and confirm.state == SDashboard.RECEIPTS
+
+
+async def test_the_user_card_opens_that_users_receipts() -> None:
+    manager = Manager({}, **{"target_user_id": 7})
+    started: list[tuple[Any, Any]] = []
+
+    async def start(state: Any, data: Any = None, **kw: Any) -> None:
+        started.append((state, data))
+
+    manager.start = start  # type: ignore[attr-defined]
+    manager.dialog_data[TARGET_USER_ID] = 7
+    await open_user_receipts(None, None, manager)  # type: ignore[arg-type]
+    assert started == [
+        (SDashboard.RECEIPTS_LIST, {"s_receipts_list": "7", "s_receipts_from_card": 1})
+    ]

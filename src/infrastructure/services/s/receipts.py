@@ -27,6 +27,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Final, Optional
+from uuid import UUID
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramRetryAfter
@@ -413,6 +414,17 @@ class Receipts:
     async def get(self, receipt_id: int) -> Optional[ReceiptDto]:
         async with self.uow:
             return await self.receipt_dao.get(receipt_id)
+
+    async def find(self, text: str) -> Optional[ReceiptDto]:
+        """A receipt by its number, its link or its payment's id."""
+        query = text.strip()
+        async with self.uow:
+            try:
+                return await self.receipt_dao.by_payment(UUID(query))
+            except ValueError:
+                pass
+            receipt_uuid = parse_receipt_uuid(query)
+            return await self.receipt_dao.by_uuid(receipt_uuid) if receipt_uuid else None
 
     async def unissued(self, undelivered: bool) -> list[ReceiptDto]:
         async with self.uow:

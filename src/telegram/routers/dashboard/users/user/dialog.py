@@ -5,14 +5,19 @@ from aiogram_dialog.widgets.input import MessageInput
 from aiogram_dialog.widgets.text import Format
 from magic_filter import F
 
+from src.application.common.policy import Permission
 from src.core.enums import BannerName, SubscriptionStatus
 from src.telegram.keyboards import back_main_menu_button
 from src.telegram.routers.dashboard.broadcast.handlers import on_content_input, on_preview
 from src.telegram.routers.s.block.dialog import start_block_dialog as s_start_block_dialog
+from src.telegram.routers.s.dashboard.receipts import open_user_receipts as s_open_receipts
 from src.telegram.routers.s.give_days import on_give_days_input as s_on_give_days_input
 from src.telegram.routers.s.kept import kept_admin_getter as s_kept_getter
 from src.telegram.routers.s.kept import kept_toggle as s_kept_toggle
+from src.telegram.routers.s.user_card import inviter_getter as s_inviter_getter
+from src.telegram.routers.s.user_card import on_open_inviter as s_on_open_inviter
 from src.telegram.states import DashboardRemnashop, DashboardUser
+from src.telegram.utils import require_permission
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
 from src.telegram.widgets.kbd import (
     Button,
@@ -120,6 +125,12 @@ user = Window(
             text=I18nFormat("btn-user.transactions"),
             id="transactions",
             on_click=on_transactions,
+        ),
+        Button(
+            text=I18nFormat("btn-s-receipts.card"),
+            id="s_receipts",
+            on_click=s_open_receipts,
+            when=require_permission(Permission.SETTINGS_EXTRA),
         ),
     ),
     Row(
@@ -598,6 +609,14 @@ statistics = Window(
         when=F["has_referrals"],
     ),
     Row(
+        Button(
+            text=I18nFormat("btn-s-user.inviter"),
+            id="s_inviter",
+            on_click=s_on_open_inviter,
+        ),
+        when=F["s_inviter"],
+    ),
+    Row(
         SwitchTo(
             text=I18nFormat("btn-back.general"),
             id="back",
@@ -606,7 +625,7 @@ statistics = Window(
     ),
     IgnoreUpdate(),
     state=DashboardUser.STATISTICS,
-    getter=statistics_getter,
+    getter=[statistics_getter, s_inviter_getter],
 )
 
 referrals = Window(

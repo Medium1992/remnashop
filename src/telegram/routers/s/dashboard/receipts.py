@@ -20,7 +20,8 @@ from src.application.common.policy import Permission, PermissionPolicy
 from src.application.dto import MessagePayloadDto, TelegramUserDto
 from src.application.dto.s_receipts import NalogLogin, ReceiptDto, ReceiptStatus
 from src.application.use_cases.s.settings import ToggleReceipts
-from src.core.constants import USER_KEY
+from src.application.use_cases.user.queries.search import SearchUsers, SearchUsersDto
+from src.core.constants import TARGET_USER_ID, USER_KEY
 from src.core.enums import BannerName
 from src.infrastructure.services.s.nalog import MOSCOW, NalogError, receipt_url
 from src.infrastructure.services.s.nalog_auth import (
@@ -33,7 +34,7 @@ from src.infrastructure.services.s.receipt_import import ImportPlan
 from src.infrastructure.services.s.receipts import Receipts
 from src.telegram.s_states import SDashboard
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
-from src.telegram.widgets.kbd import Button, Row, ScrollingGroup, Select, SwitchTo, Url
+from src.telegram.widgets.kbd import Button, Cancel, Row, ScrollingGroup, Select, SwitchTo, Url
 from src.telegram.window import Window
 
 # What the input window is waiting for.
@@ -46,7 +47,10 @@ IMPORT_SINCE: Final[str] = "s_receipts_import_since"
 IMPORT_KEYS: Final[str] = "s_receipts_import_keys"
 IMPORT_VIEW: Final[str] = "s_receipts_import_view"
 IMPORT_SHOWN: Final[int] = 20
-LIST_KIND: Final[str] = "s_receipts_list"  # "unissued", "undelivered" or a user id
+LIST_KIND: Final[str] = "s_receipts_list"
+FROM_CARD: Final[str] = "s_receipts_from_card"
+FOUND: Final[str] = "s_receipts_found"
+FOUND_SHOWN: Final[int] = 30  # "unissued", "undelivered" or a user id
 ITEM: Final[str] = "s_receipts_item"
 
 PROXY_SCHEMES: Final[tuple[str, ...]] = ("socks5://", "socks4://", "http://", "https://")
@@ -190,6 +194,7 @@ async def on_input(
     receipts: FromDishka[Receipts],
     user_dao: FromDishka[UserDao],
     notifier: FromDishka[Notifier],
+    search_users: FromDishka[SearchUsers],
 ) -> None:
     dialog_manager.show_mode = ShowMode.DELETE_AND_SEND
     if not _allowed(dialog_manager):
@@ -202,6 +207,9 @@ async def on_input(
         await _drop(message)
 
     try:
+        if kind == "find":
+            await _find(message, text, dialog_manager, receipts, search_users)
+            return
         notice = await _handle_input(kind, text, data, dialog_manager, auth, receipts, user_dao)
         if notice is not None:
             key, kw = notice
@@ -217,6 +225,75 @@ async def on_input(
     except Exception as error:
         logger.exception(f"{user.log} Receipts input '{kind}' failed")
         await _tell(notifier, user, "ntf-s-receipts.cabinet", reason=html.escape(str(error)))
+
+
+async def _find(
+    message: Message,
+    text: str,
+    dialog_manager: DialogManager,
+    receipts: Receipts,
+    search_users: SearchUsers,
+) -> None:
+    """A receipt by number, link or payment id; otherwise the people the
+    admin's own user search finds: @username, a name, an id, an email, or a
+    message forwarded from them."""
+    data = dialog_manager.dialog_data
+    if text:
+        receipt = await receipts.find(text)
+        if receipt is not None:
+            data[ITEM] = receipt.id
+            data.pop(INPUT, None)
+            await dialog_manager.switch_to(SDashboard.RECEIPTS_ITEM)
+            return
+
+    found = await search_users(
+        _actor(dialog_manager),
+        SearchUsersDto(
+            query=message.text,
+            forward_from_id=message.forward_from.id if message.forward_from else None,
+            forward_sender_name=message.forward_sender_name or None,
+            is_forwarded_from_bot=message.forward_from.is_bot if message.forward_from else False,
+        ),
+    )
+    if not found:
+        raise _RefusedError("user-not-found")
+    data.pop(INPUT, None)
+    if len(found) == 1:
+        data[LIST_KIND] = str(found[0].id)
+        await dialog_manager.switch_to(SDashboard.RECEIPTS_LIST)
+        return
+    data[FOUND] = [
+        {
+            "id": person.id,
+            "label": person.name + (f" @{person.username}" if person.username else ""),
+        }
+        for person in found[:FOUND_SHOWN]
+    ]
+    await dialog_manager.switch_to(SDashboard.RECEIPTS_USERS)
+
+
+async def users_getter(dialog_manager: DialogManager, **kwargs: Any) -> dict[str, Any]:
+    found = dialog_manager.dialog_data.get(FOUND) or []
+    return {"users": found, "count": len(found)}
+
+
+async def on_found_user(
+    callback: CallbackQuery, widget: Any, dialog_manager: DialogManager, item_id: str
+) -> None:
+    dialog_manager.dialog_data[LIST_KIND] = item_id
+    await dialog_manager.switch_to(SDashboard.RECEIPTS_LIST)
+
+
+async def open_user_receipts(
+    callback: CallbackQuery, widget: Any, dialog_manager: DialogManager
+) -> None:
+    """From the user card: that user's receipts."""
+    if not _allowed(dialog_manager):
+        return
+    await dialog_manager.start(
+        SDashboard.RECEIPTS_LIST,
+        data={LIST_KIND: str(dialog_manager.dialog_data[TARGET_USER_ID]), FROM_CARD: 1},
+    )
 
 
 class _RefusedError(Exception):
@@ -308,17 +385,6 @@ async def _handle_input(  # noqa: C901
         data[IMPORT_VIEW] = _import_view(plan)
         data.pop(INPUT, None)
         await dialog_manager.switch_to(SDashboard.RECEIPTS_IMPORT)
-        return None
-
-    if kind == "find":
-        found = None
-        if text.lstrip("-").isdigit():
-            found = await user_dao.get_by_telegram_id(int(text))
-        if found is None:
-            raise _RefusedError("user-not-found")
-        data[LIST_KIND] = str(found.id)
-        data.pop(INPUT, None)
-        await dialog_manager.switch_to(SDashboard.RECEIPTS_LIST)
         return None
 
     if kind == "manual":
@@ -418,17 +484,30 @@ def _item(receipt: ReceiptDto) -> dict[str, Any]:
 async def list_getter(
     dialog_manager: DialogManager,
     receipts: FromDishka[Receipts],
+    user_dao: FromDishka[UserDao],
     **kwargs: Any,
 ) -> dict[str, Any]:
-    kind = dialog_manager.dialog_data.get(LIST_KIND, "unissued")
+    data = dialog_manager.dialog_data
+    start = dialog_manager.start_data
+    if LIST_KIND not in data and isinstance(start, dict) and LIST_KIND in start:
+        # Opened from the user card.
+        data[LIST_KIND] = start[LIST_KIND]
+        data[FROM_CARD] = 1
+    kind = data.get(LIST_KIND, "unissued")
+    who = ""
     if kind in ("unissued", "undelivered"):
         items = await receipts.unissued(undelivered=kind == "undelivered")
     else:
         items = await receipts.of_user(int(kind), issued_only=False)
+        person = await user_dao.get_by_id(int(kind))
+        if person is not None:
+            who = person.name + (f" (@{person.username})" if person.username else "")
     return {
         "kind": kind if kind in ("unissued", "undelivered") else "user",
+        "who": html.escape(who),
         "receipts": [_item(receipt) for receipt in items],
         "count": len(items),
+        "from_card": int(bool(data.get(FROM_CARD))),
     }
 
 
@@ -619,6 +698,28 @@ receipts_import = Window(
     getter=import_getter,
 )
 
+receipts_users = Window(
+    Banner(BannerName.DASHBOARD),
+    I18nFormat("msg-s-receipts.users"),
+    ScrollingGroup(
+        Select(
+            I18nFormat("btn-s-receipts.user", name=F["item"]["label"]),
+            id="r_user",
+            item_id_getter=lambda item: item["id"],
+            items="users",
+            on_click=on_found_user,
+        ),
+        id="r_users",
+        width=1,
+        height=8,
+        hide_on_single_page=True,
+    ),
+    Row(SwitchTo(I18nFormat("btn-back.general"), id="back", state=SDashboard.RECEIPTS)),
+    IgnoreUpdate(),
+    state=SDashboard.RECEIPTS_USERS,
+    getter=users_getter,
+)
+
 receipts_list = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-receipts.list"),
@@ -641,7 +742,15 @@ receipts_list = Window(
         height=8,
         hide_on_single_page=True,
     ),
-    Row(SwitchTo(I18nFormat("btn-back.general"), id="back", state=SDashboard.RECEIPTS)),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-back.general"),
+            id="back",
+            state=SDashboard.RECEIPTS,
+            when=~F["from_card"],
+        ),
+        Cancel(I18nFormat("btn-back.general"), id="back_card", when=F["from_card"]),
+    ),
     IgnoreUpdate(),
     state=SDashboard.RECEIPTS_LIST,
     getter=list_getter,
