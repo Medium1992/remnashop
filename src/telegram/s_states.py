@@ -22,6 +22,10 @@ class SDashboard(StatesGroup):
     TEXT_VIEW = State()
     TEXT_CONFIRM = State()
     BONUS = State()
+    RECEIPTS = State()
+    RECEIPTS_INPUT = State()
+    RECEIPTS_LIST = State()
+    RECEIPTS_ITEM = State()
 
 
 class SBlock(StatesGroup):
@@ -29,4 +33,8 @@ class SBlock(StatesGroup):
 
 
 class SConnect(StatesGroup):
+    MAIN = State()
+
+
+class SReceipts(StatesGroup):
     MAIN = State()

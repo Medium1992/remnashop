@@ -10,9 +10,12 @@ from src.core.enums import BannerName, PaymentGatewayType, PurchaseType
 from src.telegram.keyboards import back_main_menu_button, connect_buttons
 from src.telegram.routers.s.kept import kept_user_getter as s_kept_user_getter
 from src.telegram.routers.s.plan_change_windows import change_devices, change_mode
+from src.telegram.routers.s.receipts import receipts_note_getter as s_receipts_note_getter
+from src.telegram.routers.s.receipts import receipts_user_getter as s_receipts_user_getter
+from src.telegram.s_states import SReceipts
 from src.telegram.states import Subscription
 from src.telegram.widgets import Banner, I18nFormat, IgnoreUpdate
-from src.telegram.widgets.kbd import Button, Column, Group, Row, Select, SwitchTo, Url
+from src.telegram.widgets.kbd import Button, Column, Group, Row, Select, Start, SwitchTo, Url
 
 from .getters import (
     confirm_getter,
@@ -66,10 +69,18 @@ subscription = Window(
             on_click=lambda c, w, m: m.switch_to(Subscription.PROMOCODE),
         ),
     ),
+    Row(
+        Start(
+            text=I18nFormat("btn-s-receipts.my"),
+            id="s_receipts",
+            state=SReceipts.MAIN,
+            when=F["s_receipts"],
+        ),
+    ),
     *back_main_menu_button,
     IgnoreUpdate(),
     state=Subscription.MAIN,
-    getter=[subscription_getter, s_kept_user_getter],
+    getter=[subscription_getter, s_kept_user_getter, s_receipts_user_getter],
 )
 
 plan = Window(
@@ -198,6 +209,7 @@ payment_method = Window(
 confirm = Window(
     Banner(BannerName.SUBSCRIPTION),
     I18nFormat("msg-subscription-confirm"),
+    I18nFormat("msg-s-receipt.individuals", F["s_receipts_on"]),
     Row(
         Url(
             text=I18nFormat("btn-subscription.pay"),
@@ -238,7 +250,7 @@ confirm = Window(
     *back_main_menu_button,
     IgnoreUpdate(),
     state=Subscription.CONFIRM,
-    getter=confirm_getter,
+    getter=[confirm_getter, s_receipts_note_getter],
 )
 
 success_payment = Window(

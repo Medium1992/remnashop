@@ -42,6 +42,7 @@ from .handlers import (
     on_target_input,
     on_toggle,
 )
+from .receipts import receipts_input, receipts_item, receipts_list, receipts_main
 from .texts import (
     on_text_default,
     on_text_input,
@@ -132,6 +133,13 @@ main = Window(
         )
     ),
     Row(_toggle("kept_enabled")),
+    Row(
+        SwitchTo(
+            I18nFormat("btn-s.receipts", enabled=F["receipts_enabled"]),
+            id="receipts",
+            state=SDashboard.RECEIPTS,
+        )
+    ),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(SwitchTo(I18nFormat("btn-s.texts"), id="texts", state=SDashboard.TEXTS)),
     Row(
@@ -452,4 +460,8 @@ router = Dialog(
     text_view,
     text_confirm,
     bonus,
+    receipts_main,
+    receipts_input,
+    receipts_list,
+    receipts_item,
 )

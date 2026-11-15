@@ -8,9 +8,11 @@ metadata cannot resolve them.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -41,6 +43,61 @@ class SKeptLimits(SBase):
     devices: Mapped[bool] = mapped_column(Boolean, default=False)
     traffic: Mapped[bool] = mapped_column(Boolean, default=False)
     squads: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SNalogAccount(SBase):
+    """The bot's login to "Мой налог": one row. Secrets are encrypted with the
+    app key (``APP_CRYPT_KEY``), so a copy of the database alone opens nothing."""
+
+    __tablename__ = "s_nalog_account"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    inn: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
+    method: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    password: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    device_id: Mapped[str] = mapped_column(String(64), default="")
+    proxy: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    lost_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    lost_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SReceipt(SBase):
+    """A receipt for one payment: one row per payment, so never two receipts."""
+
+    __tablename__ = "s_receipts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payment_id: Mapped[UUID] = mapped_column(unique=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    purchase_type: Mapped[str] = mapped_column(String(16))
+    duration: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    name: Mapped[str] = mapped_column(String(256), default="")
+    receipt_uuid: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    inn: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
+    client_inn: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
+    client_name: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_try_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    canceled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

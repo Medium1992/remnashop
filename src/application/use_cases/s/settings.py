@@ -11,6 +11,7 @@ from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import UserDto
 from src.core.utils.client_versions import DEFAULT_SOURCES, EDITABLE_KEYS
+from src.core.utils.time import datetime_now
 
 # Every number an admin may type in, with the range it must fall in.
 NUMBER_FIELDS: Final[dict[str, tuple[int, int]]] = {
@@ -222,3 +223,26 @@ class SetRulesText(Interactor[str, str]):
 
         logger.info(f"{actor.log} Rules text {'set' if text else 'cleared'} ({len(text)} chars)")
         return text
+
+
+class ToggleReceipts(Interactor[None, bool]):
+    """Receipts on or off. Switching on marks the moment: only payments from
+    then on get a receipt by themselves."""
+
+    required_permission = Permission.SETTINGS_EXTRA
+
+    def __init__(self, uow: UnitOfWork, settings_dao: SettingsDao) -> None:
+        self.uow = uow
+        self.settings_dao = settings_dao
+
+    async def _execute(self, actor: UserDto, data: None) -> bool:
+        async with self.uow:
+            settings = await self.settings_dao.get()
+            receipts = settings.extra.s.receipts
+            receipts.enabled = not receipts.enabled
+            receipts.since = datetime_now().isoformat() if receipts.enabled else ""
+            await self.settings_dao.update(settings)
+            await self.uow.commit()
+
+        logger.info(f"{actor.log} Receipts {'on' if receipts.enabled else 'off'}")
+        return receipts.enabled

@@ -8,6 +8,7 @@ from src.application.use_cases.s import S_USE_CASES
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.database.dao.s_bonus import BonusDaysDao
 from src.infrastructure.database.dao.s_kept import KeptLimitsDao
+from src.infrastructure.database.dao.s_receipts import NalogAccountDao, ReceiptDao
 from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.bonus import BonusDays, SGiveReferrerReward
 from src.infrastructure.services.s.client_versions import ClientVersionsService
@@ -15,6 +16,8 @@ from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.inactive import InactiveProfiles
 from src.infrastructure.services.s.invites import InviteLinks
 from src.infrastructure.services.s.jobs import DeviceJobs
+from src.infrastructure.services.s.nalog_auth import NalogAuth
+from src.infrastructure.services.s.receipts import Receipts
 from src.infrastructure.services.s.reminders import DeviceReminders
 from src.infrastructure.services.s.remnawave import SRemnawave
 from src.infrastructure.services.s.slots import SlotService
@@ -49,6 +52,10 @@ class SProvider(Provider):
     bonus = provide(source=BonusDays)
     kept_dao = provide(source=KeptLimitsDao)
     kept = provide(source=KeptLimits)
+    nalog_account_dao = provide(source=NalogAccountDao)
+    nalog_auth = provide(source=NalogAuth)
+    receipt_dao = provide(source=ReceiptDao)
+    receipts = provide(source=Receipts)
     # Keeps referral days while bonus days are on; upstream's reward otherwise.
     give_referrer_reward = provide(
         source=SGiveReferrerReward,

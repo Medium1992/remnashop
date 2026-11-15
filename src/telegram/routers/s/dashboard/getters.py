@@ -81,6 +81,7 @@ async def s_getter(
         "connect_page": int(s.connect.enabled),
         "bonus_enabled": int(s.bonus.enabled),
         "kept_enabled": int(s.kept.enabled),
+        "receipts_enabled": int(s.receipts.enabled),
         "kind": dialog_manager.dialog_data.get("s_kind", "stale"),
     }
 

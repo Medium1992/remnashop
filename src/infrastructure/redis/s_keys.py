@@ -64,3 +64,7 @@ class InviteOwnerKey(StorageKey, prefix="s_invites"):
     """The one-time links a user has issued, newest last (JSON)."""
 
     user_id: int
+
+
+class ReceiptsRunKey(StorageKey, prefix="s_receipts_run"):
+    """Held while receipts are being sent: one run at a time, bot or worker."""

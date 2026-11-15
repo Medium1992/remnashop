@@ -125,6 +125,18 @@ class KeptLimitsSettingsDto(TrackableMixin):
 
 
 @dataclass(kw_only=True)
+class ReceiptsSettingsDto(TrackableMixin):
+    """Receipts of the self-employed in "Мой налог" after each rouble payment.
+
+    ``since`` (ISO time) is when they were switched on: payments before it get
+    none unless an admin adds them.
+    """
+
+    enabled: bool = False
+    since: str = ""
+
+
+@dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
     versions: ClientVersionsSettingsDto = field(default_factory=ClientVersionsSettingsDto)
@@ -137,6 +149,7 @@ class SSettingsDto(TrackableMixin):
     connect: ConnectPageSettingsDto = field(default_factory=ConnectPageSettingsDto)
     bonus: BonusDaysSettingsDto = field(default_factory=BonusDaysSettingsDto)
     kept: KeptLimitsSettingsDto = field(default_factory=KeptLimitsSettingsDto)
+    receipts: ReceiptsSettingsDto = field(default_factory=ReceiptsSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

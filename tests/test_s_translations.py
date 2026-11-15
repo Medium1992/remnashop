@@ -40,6 +40,8 @@ NUMERIC = """
     s_traffic s_traffic_left s_traffic_limit s_keep connect_page connectable
     bonus_enabled bonus_plan_set s_bonus_days s_bonus_plan_set days total chosen active
     kept kept_enabled s_kept_devices s_kept_traffic s_kept_squads
+    receipts_enabled logged_in lost proxy_set issued waiting unissued undelivered found
+    s_receipts s_receipts_on
 """
 TEXTUAL = """
     title app installed latest url label apps devices content name kind field ch_title
@@ -47,6 +49,7 @@ TEXTUAL = """
     online status reason until s_invite_links url texts_mode texts_query text_key
     text_source text_variables detail rules subscription_url bonus_plan s_bonus_plan
     currency period s_currency s_keep_date_local s_today_period s_today_date_local s_plan
+    lost_reason method inn unissued_amount undelivered_amount input buyer details lines
 """
 ARGS: dict[str, Any] = {**dict.fromkeys(NUMERIC.split(), 1), **dict.fromkeys(TEXTUAL.split(), "x")}
 
