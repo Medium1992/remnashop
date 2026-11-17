@@ -9,6 +9,7 @@ from starlette.middleware.cors import CORSMiddleware
 from src.__version__ import __version__
 from src.core.config import AppConfig
 from src.lifespan import lifespan
+from src.web.s_cabinet import mount_cabinet
 
 from .endpoints import (
     TelegramWebhookEndpoint,
@@ -71,6 +72,9 @@ def get_app(config: AppConfig, dispatcher: Dispatcher) -> FastAPI:
         async def openapi_schema() -> dict:
             api_routes = [r for r in app.routes if getattr(r, "include_in_schema", True)]
             return get_openapi(title=app.title, version=app.version, routes=api_routes)
+
+    # s edition: the web cabinet's API, when CABINET_DOMAIN and the secret are set
+    mount_cabinet(app)
 
     telegram_webhook_endpoint = TelegramWebhookEndpoint(
         dispatcher=dispatcher,

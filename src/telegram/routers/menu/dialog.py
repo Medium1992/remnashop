@@ -11,6 +11,7 @@ from src.core.enums import BannerName
 from src.telegram.keyboards import build_buttons_row, connect_buttons
 from src.telegram.routers.dashboard.handlers import on_smart_search
 from src.telegram.routers.s.bonus import on_take_bonus as s_on_take_bonus
+from src.telegram.routers.s.cabinet import on_cabinet as s_on_cabinet
 from src.telegram.routers.s.devices import on_add_slot as s_on_add_slot
 from src.telegram.routers.s.invites import on_new_invite as s_on_new_invite
 from src.telegram.routers.s.rules import on_show_rules as s_on_show_rules
@@ -127,6 +128,14 @@ menu = Window(
             id="s_rules",
             on_click=s_on_show_rules,
             when=F["s_rules"],
+        ),
+    ),
+    Row(
+        Button(
+            text=I18nFormat("btn-s-cabinet.menu"),
+            id="s_cabinet",
+            on_click=s_on_cabinet,
+            when=F["s_cabinet"],
         ),
     ),
     Row(

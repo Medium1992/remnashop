@@ -1,6 +1,7 @@
 from aiogram import Router
 
 from . import dashboard, extra, menu, subscription
+from .s import cabinet as s_cabinet
 from .s import connect as s_connect
 from .s import receipts as s_receipts
 from .s.block import dialog as s_block_dialog
@@ -18,6 +19,7 @@ def setup_routers(router: Router) -> None:
         extra.member.router,
         extra.channel_member.router,
         extra.goto.router,
+        s_cabinet.router,
         extra.inline.router,
         s_block_handlers.router,
         #

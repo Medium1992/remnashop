@@ -1,16 +1,21 @@
 from dishka import AnyOf, Provider, Scope, provide, provide_all
+from redis.asyncio import Redis
 
 from src.application.common import Remnawave
 from src.application.services.s_kept import KeptLimits
 from src.application.services.s_plan_change import PlanChange
 from src.application.use_cases.referral.commands.rewards import GiveReferrerReward
 from src.application.use_cases.s import S_USE_CASES
+from src.core.config import AppConfig
+from src.core.utils.s_cabinet import CabinetConfig, signing_key
+from src.core.utils.s_cabinet import cabinet_config as s_cabinet_config
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.database.dao.s_bonus import BonusDaysDao
 from src.infrastructure.database.dao.s_kept import KeptLimitsDao
 from src.infrastructure.database.dao.s_receipts import NalogAccountDao, ReceiptDao
 from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.bonus import BonusDays, SGiveReferrerReward
+from src.infrastructure.services.s.cabinet_sessions import CabinetSessions
 from src.infrastructure.services.s.channels import GatewayChannels
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
@@ -58,6 +63,19 @@ class SProvider(Provider):
     receipt_dao = provide(source=ReceiptDao)
     receipts = provide(source=Receipts)
     gateway_channels = provide(source=GatewayChannels)
+
+    @provide(scope=Scope.APP)
+    def cabinet_config(self) -> CabinetConfig:
+        # resolved only by the cabinet's routes, which exist only when it is set
+        config = s_cabinet_config()
+        if config is None:
+            raise RuntimeError("The web cabinet is not configured")
+        return config
+
+    @provide(scope=Scope.APP)
+    def cabinet_sessions(self, redis: Redis, config: AppConfig) -> CabinetSessions:
+        return CabinetSessions(redis, signing_key(config.crypt_key.get_secret_value()))
+
     # Keeps referral days while bonus days are on; upstream's reward otherwise.
     give_referrer_reward = provide(
         source=SGiveReferrerReward,

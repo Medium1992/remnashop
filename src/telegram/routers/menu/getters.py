@@ -16,6 +16,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.core.utils.s_cabinet import cabinet_config
 from src.core.utils.time import get_traffic_reset_delta
 from src.infrastructure.services.s.bonus import BonusDays
 from src.infrastructure.services.s.invites import InviteLinks
@@ -60,6 +61,7 @@ async def menu_getter(
             "support_url": support_url,
             "s_rules": int(bool(settings.extra.s.rules.text)),
             "s_connect": int(settings.extra.s.connect.enabled),
+            "s_cabinet": int(cabinet_config() is not None),
             "web_enabled": config.web_enabled,
             "web_cabinet_url": config.web_cabinet_url.strip(),
             # referral
