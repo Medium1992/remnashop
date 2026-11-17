@@ -271,7 +271,7 @@ def test_only_days_not_yet_issued_are_counted_and_claimed() -> None:
     assert "referral_rewards.amount > %(amount_1)s" in where
 
 
-async def test_payments_by_the_link_count_days_still_kept() -> None:
+async def test_payments_by_the_link_count_paying_invitees() -> None:
     seen: list[Any] = []
 
     class Session:
@@ -284,4 +284,10 @@ async def test_payments_by_the_link_count_days_still_kept() -> None:
     assert await dao.get_referrals_with_payment_count(7) == 2
     dialect: Any = postgresql.dialect()  # type: ignore[no-untyped-call]
     sql = str(seen[0].compile(dialect=dialect))
-    assert "referral_rewards.user_id" in sql and "is_issued" not in sql
+    # counted from payments: not from rewards, which the program may not give
+    assert "referral_rewards" not in sql
+    assert "referrals.referrer_id = %(referrer_id_1)s" in sql
+    assert "transactions.status = %(status_1)s" in sql
+    assert "transactions.is_test IS false" in sql
+    assert "count(distinct(transactions.user_id))" in sql
+    assert "CAST((transactions.pricing ->> %(pricing_1)s) AS FLOAT) > %(param_1)s" in sql

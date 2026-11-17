@@ -15,8 +15,8 @@ from src.application.dto import (
     ReferralStatisticsDto,
     UserReferralStatsDto,
 )
-from src.core.enums import ReferralLevel, ReferralRewardType
-from src.infrastructure.database.models import Referral, ReferralReward
+from src.core.enums import ReferralLevel, ReferralRewardType, TransactionStatus
+from src.infrastructure.database.models import Referral, ReferralReward, Transaction
 from src.infrastructure.database.models.user import User
 
 
@@ -273,10 +273,18 @@ class ReferralDaoImpl(ReferralDao):
         )
 
     async def get_referrals_with_payment_count(self, user_id: int) -> int:
-        # s: a reward exists once the invited person paid, issued or not: bonus days
-        # stay not issued until taken, and a failed grant is still a payment.
-        stmt = select(func.count(func.distinct(ReferralReward.referral_id))).where(
-            ReferralReward.user_id == user_id,
+        # s: invitees who paid, read from their payments rather than from rewards:
+        # a reward is made only when the program gives one (it may be off, zero,
+        # or for the first payment only), and bonus days stay not issued.
+        stmt = (
+            select(func.count(func.distinct(Transaction.user_id)))
+            .join(Referral, Referral.referred_id == Transaction.user_id)
+            .where(
+                Referral.referrer_id == user_id,
+                Transaction.status == TransactionStatus.COMPLETED,
+                Transaction.is_test.is_(False),
+                Transaction.pricing["final_amount"].as_float() > 0,
+            )
         )
         count = await self.session.scalar(stmt) or 0
 
