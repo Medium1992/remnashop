@@ -7,7 +7,10 @@ existed loads with the defaults below. Every feature defaults to off, so an
 """
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Optional
+
+from src.core.enums import PaymentGatewayType
 
 from .base import TrackableMixin
 
@@ -99,7 +102,7 @@ class RulesTextSettingsDto(TrackableMixin):
 
 @dataclass(kw_only=True)
 class ConnectPageSettingsDto(TrackableMixin):
-    """"Connect" opens a window with the link, its QR code and the button to open
+    """ "Connect" opens a window with the link, its QR code and the button to open
     it, instead of opening the link right away."""
 
     enabled: bool = False
@@ -136,6 +139,49 @@ class ReceiptsSettingsDto(TrackableMixin):
     since: str = ""
 
 
+class GatewayChannel(StrEnum):
+    BOT = "bot"  # the bot and the cabinet open as its Mini App
+    WEB = "web"  # the cabinet in a browser
+
+
+@dataclass(kw_only=True)
+class GatewayChannelsSettingsDto(TrackableMixin):
+    """Where each payment gateway is offered: in the bot (and its Mini App) or
+    in the web cabinet.
+
+    Telegram takes digital goods in its bots and Mini Apps only for Stars, so
+    unlike the other s features this one is on from the start: ``None`` means
+    the default, Stars alone in the bot and everything else in the cabinet. A
+    list, once an admin edits it, names the gateway types offered there.
+    ``notified`` is set once the owner was told the bot shows Stars only.
+    """
+
+    bot: Optional[list[str]] = None
+    web: Optional[list[str]] = None
+    notified: bool = False
+
+    def offers(self, gateway_type: str, channel: GatewayChannel) -> bool:
+        kind = PaymentGatewayType(gateway_type).value
+        chosen = self.bot if channel is GatewayChannel.BOT else self.web
+        if chosen is not None:
+            return kind in chosen
+        stars = kind == PaymentGatewayType.TELEGRAM_STARS.value
+        return stars if channel is GatewayChannel.BOT else not stars
+
+    def toggle(self, gateway_type: str, channel: GatewayChannel) -> bool:
+        """Offer the gateway in the channel or stop; the default gets spelled
+        out into a list. True when it is offered afterwards."""
+        kind = PaymentGatewayType(gateway_type).value
+        current = [t.value for t in PaymentGatewayType if self.offers(t.value, channel)]
+        offered = kind not in current
+        chosen = [*current, kind] if offered else [t for t in current if t != kind]
+        if channel is GatewayChannel.BOT:
+            self.bot = chosen
+        else:
+            self.web = chosen
+        return offered
+
+
 @dataclass(kw_only=True)
 class SSettingsDto(TrackableMixin):
     slots: SlotsSettingsDto = field(default_factory=SlotsSettingsDto)
@@ -150,6 +196,7 @@ class SSettingsDto(TrackableMixin):
     bonus: BonusDaysSettingsDto = field(default_factory=BonusDaysSettingsDto)
     kept: KeptLimitsSettingsDto = field(default_factory=KeptLimitsSettingsDto)
     receipts: ReceiptsSettingsDto = field(default_factory=ReceiptsSettingsDto)
+    channels: GatewayChannelsSettingsDto = field(default_factory=GatewayChannelsSettingsDto)
     # HWID values that mark a device as a router (MikroTik container and the
     # like). A router takes a regular slot; it is only left out of reminders
     # that make no sense for it.

@@ -20,6 +20,7 @@ from src.core.utils.i18n_helpers import (
     i18n_format_expire_time,
     i18n_format_traffic_limit,
 )
+from src.infrastructure.services.s.channels import GatewayChannels
 from src.telegram.routers.s import plan_change as s_plan_change
 from src.telegram.routers.s.subscription import subscription_extra as s_subscription_extra
 
@@ -176,6 +177,7 @@ async def payment_method_getter(
     i18n: FromDishka[TranslatorRunner],
     payment_gateway_dao: FromDishka[PaymentGatewayDao],
     pricing_service: FromDishka[PricingService],
+    gateway_channels: FromDishka[GatewayChannels],
     **kwargs: Any,
 ) -> dict[str, Any]:
     raw_plan = dialog_manager.dialog_data.get(PlanDto.__name__)
@@ -184,7 +186,7 @@ async def payment_method_getter(
         raise UnknownIntent("PlanDto not found in subscription dialog data")
 
     plan = retort.load(raw_plan, PlanDto)
-    gateways = await payment_gateway_dao.get_active()
+    gateways = await gateway_channels.for_bot()  # s edition: the bot's gateways
     selected_duration = dialog_manager.dialog_data["selected_duration"]
     only_single_duration = dialog_manager.dialog_data.get("only_single_duration", False)
     duration = plan.get_duration(selected_duration)
@@ -244,6 +246,7 @@ async def confirm_getter(
     i18n: FromDishka[TranslatorRunner],
     payment_gateway_dao: FromDishka[PaymentGatewayDao],
     pricing_service: FromDishka[PricingService],
+    gateway_channels: FromDishka[GatewayChannels],
     **kwargs: Any,
 ) -> dict[str, Any]:
     raw_plan = dialog_manager.dialog_data.get(PlanDto.__name__)
@@ -272,7 +275,7 @@ async def confirm_getter(
     pricing = retort.load(pricing_data, PriceDetailsDto)
 
     key, kw = i18n_format_days(duration.days)
-    gateways = await payment_gateway_dao.get_active()
+    gateways = await gateway_channels.for_bot()  # s edition: the bot's gateways
 
     plan_is_modified = 1 if dialog_manager.dialog_data.get("plan_is_modified", False) else 0
 

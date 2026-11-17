@@ -28,6 +28,7 @@ class SDashboard(StatesGroup):
     RECEIPTS_ITEM = State()
     RECEIPTS_IMPORT = State()
     RECEIPTS_USERS = State()
+    GATEWAYS = State()
 
 
 class SBlock(StatesGroup):
