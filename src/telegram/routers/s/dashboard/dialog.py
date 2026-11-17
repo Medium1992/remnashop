@@ -21,7 +21,6 @@ from src.telegram.widgets.kbd import (
 from src.telegram.window import Window
 
 from .bonus import bonus
-from .gateways import gateways
 from .getters import blocked_getter, inactive_list_getter, s_getter
 from .handlers import (
     on_back_from_number,
@@ -148,7 +147,6 @@ main = Window(
             state=SDashboard.RECEIPTS,
         )
     ),
-    Row(SwitchTo(I18nFormat("btn-s.gateways"), id="gateways", state=SDashboard.GATEWAYS)),
     Row(SwitchTo(I18nFormat("btn-s.blocked"), id="blocked", state=SDashboard.BLOCKED)),
     Row(SwitchTo(I18nFormat("btn-s.texts"), id="texts", state=SDashboard.TEXTS)),
     Row(
@@ -475,5 +473,4 @@ router = Dialog(
     receipts_item,
     receipts_import,
     receipts_users,
-    gateways,
 )

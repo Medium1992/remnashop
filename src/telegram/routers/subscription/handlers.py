@@ -22,7 +22,6 @@ from src.application.use_cases.plan.queries.match import MatchPlan, MatchPlanDto
 from src.application.use_cases.user.queries.plans import GetAvailablePlans
 from src.core.constants import PAYMENT_PREFIX, USER_KEY
 from src.core.enums import PaymentGatewayType, PurchaseType, TransactionStatus
-from src.infrastructure.services.s.channels import Channel, GatewayChannels
 from src.telegram.routers.s import plan_change as s_plan_change
 from src.telegram.states import Subscription
 
@@ -171,11 +170,10 @@ async def on_purchase_type_select(
     notifier: FromDishka[Notifier],
     match_plan: FromDishka[MatchPlan],
     get_available_plans: FromDishka[GetAvailablePlans],
-    gateway_channels: FromDishka[GatewayChannels],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     plans: list[PlanDto] = await get_available_plans.system(user)
-    gateways = await gateway_channels.for_bot()  # s edition: the bot's gateways
+    gateways = await payment_gateway_dao.get_active()
     dialog_manager.dialog_data["purchase_type"] = purchase_type
     dialog_manager.dialog_data.pop(CURRENT_DURATION_KEY, None)
     dialog_manager.dialog_data.pop(PAYMENT_CACHE_KEY, None)
@@ -222,13 +220,12 @@ async def on_subscription_plans(  # noqa: C901
     match_plan: FromDishka[MatchPlan],
     get_available_plans: FromDishka[GetAvailablePlans],
     create_payment: FromDishka[CreatePayment],
-    gateway_channels: FromDishka[GatewayChannels],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Opened subscription plans menu")
 
     plans: list[PlanDto] = await get_available_plans.system(user)
-    gateways = await gateway_channels.for_bot()  # s edition: the bot's gateways
+    gateways = await payment_gateway_dao.get_active()
 
     if not callback.data:
         raise ValueError("Callback data is empty")
@@ -353,7 +350,6 @@ async def on_duration_select(
     notifier: FromDishka[Notifier],
     pricing_service: FromDishka[PricingService],
     create_payment: FromDishka[CreatePayment],
-    gateway_channels: FromDishka[GatewayChannels],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Selected subscription duration '{selected_duration}' days")
@@ -376,7 +372,7 @@ async def on_duration_select(
     if await s_plan_change.intercept(dialog_manager, plan, selected_duration):
         return
     settings = await settings_dao.get()
-    gateways = await gateway_channels.for_bot()  # s edition: the bot's gateways
+    gateways = await payment_gateway_dao.get_active()
     currency = settings.default_currency
     price = pricing_service.calculate(
         user,
@@ -437,16 +433,9 @@ async def on_payment_method_select(
     notifier: FromDishka[Notifier],
     pricing_service: FromDishka[PricingService],
     create_payment: FromDishka[CreatePayment],
-    gateway_channels: FromDishka[GatewayChannels],
 ) -> None:
     user: TelegramUserDto = dialog_manager.middleware_data[USER_KEY]
     logger.info(f"{user.log} Selected payment method '{selected_payment_method}'")
-
-    # s edition: a gateway taken out of the bot is refused, even from an old button
-    if not await gateway_channels.allows(selected_payment_method, Channel.BOT):
-        logger.warning(f"{user.log} Gateway '{selected_payment_method}' is not offered in the bot")
-        await dialog_manager.start(state=Subscription.MAIN)
-        return
 
     selected_duration = dialog_manager.dialog_data[CURRENT_DURATION_KEY]
     dialog_manager.dialog_data[CURRENT_METHOD_KEY] = selected_payment_method

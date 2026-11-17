@@ -11,7 +11,6 @@ from src.infrastructure.database.dao.s_kept import KeptLimitsDao
 from src.infrastructure.database.dao.s_receipts import NalogAccountDao, ReceiptDao
 from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.bonus import BonusDays, SGiveReferrerReward
-from src.infrastructure.services.s.channels import GatewayChannels
 from src.infrastructure.services.s.client_versions import ClientVersionsService
 from src.infrastructure.services.s.device_scan import DeviceScanner
 from src.infrastructure.services.s.inactive import InactiveProfiles
@@ -57,7 +56,6 @@ class SProvider(Provider):
     nalog_auth = provide(source=NalogAuth)
     receipt_dao = provide(source=ReceiptDao)
     receipts = provide(source=Receipts)
-    gateway_channels = provide(source=GatewayChannels)
     # Keeps referral days while bonus days are on; upstream's reward otherwise.
     give_referrer_reward = provide(
         source=SGiveReferrerReward,

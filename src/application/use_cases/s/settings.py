@@ -10,7 +10,6 @@ from src.application.common.dao import PlanDao, SettingsDao
 from src.application.common.policy import Permission
 from src.application.common.uow import UnitOfWork
 from src.application.dto import UserDto
-from src.application.dto.s_settings import GatewayChannel
 from src.core.utils.client_versions import DEFAULT_SOURCES, EDITABLE_KEYS
 from src.core.utils.time import datetime_now
 
@@ -247,34 +246,3 @@ class ToggleReceipts(Interactor[None, bool]):
 
         logger.info(f"{actor.log} Receipts {'on' if receipts.enabled else 'off'}")
         return receipts.enabled
-
-
-@dataclass(frozen=True)
-class ToggleGatewayChannelDto:
-    gateway_type: str
-    channel: GatewayChannel
-
-
-class ToggleGatewayChannel(Interactor[ToggleGatewayChannelDto, bool]):
-    """Offer a gateway in the bot or in the cabinet, or stop; True when offered."""
-
-    required_permission = Permission.SETTINGS_EXTRA
-
-    def __init__(self, uow: UnitOfWork, settings_dao: SettingsDao) -> None:
-        self.uow = uow
-        self.settings_dao = settings_dao
-
-    async def _execute(self, actor: UserDto, data: ToggleGatewayChannelDto) -> bool:
-        async with self.uow:
-            settings = await self.settings_dao.get()
-            channels = settings.extra.s.channels
-            offered = channels.toggle(data.gateway_type, data.channel)
-            channels.notified = True
-            await self.settings_dao.update(settings)
-            await self.uow.commit()
-
-        logger.info(
-            f"{actor.log} Gateway '{data.gateway_type}' "
-            f"{'offered' if offered else 'not offered'} in '{data.channel}'"
-        )
-        return offered
