@@ -273,9 +273,10 @@ class ReferralDaoImpl(ReferralDao):
         )
 
     async def get_referrals_with_payment_count(self, user_id: int) -> int:
+        # s: a reward exists once the invited person paid, issued or not: bonus days
+        # stay not issued until taken, and a failed grant is still a payment.
         stmt = select(func.count(func.distinct(ReferralReward.referral_id))).where(
             ReferralReward.user_id == user_id,
-            ReferralReward.is_issued.is_(True),
         )
         count = await self.session.scalar(stmt) or 0
 

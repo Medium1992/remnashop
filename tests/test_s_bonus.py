@@ -12,6 +12,7 @@ from src.application.dto import ReferralRewardDto, SettingsDto, UserDto
 from src.application.use_cases.referral.commands.rewards import GiveReferrerRewardDto
 from src.core.enums import ReferralRewardType, SubscriptionStatus
 from src.core.utils.time import datetime_now
+from src.infrastructure.database.dao.referral import ReferralDaoImpl
 from src.infrastructure.database.dao.s_bonus import BonusDaysDao
 from src.infrastructure.services.s.bonus import (
     BonusDays,
@@ -268,3 +269,19 @@ def test_only_days_not_yet_issued_are_counted_and_claimed() -> None:
     assert "referral_rewards.type = %(type_1)s" in where
     assert "referral_rewards.is_issued IS false" in where
     assert "referral_rewards.amount > %(amount_1)s" in where
+
+
+async def test_payments_by_the_link_count_days_still_kept() -> None:
+    seen: list[Any] = []
+
+    class Session:
+        async def scalar(self, stmt: Any) -> int:
+            seen.append(stmt)
+            return 2
+
+    dao = ReferralDaoImpl.__new__(ReferralDaoImpl)
+    dao.session = Session()  # type: ignore[assignment]
+    assert await dao.get_referrals_with_payment_count(7) == 2
+    dialect: Any = postgresql.dialect()  # type: ignore[no-untyped-call]
+    sql = str(seen[0].compile(dialect=dialect))
+    assert "referral_rewards.user_id" in sql and "is_issued" not in sql
