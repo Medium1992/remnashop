@@ -408,6 +408,9 @@ class TorrentBlockerReportEvent(UserEvent):
     protocol: str
     source: str
     destination: str
+    # s edition: the IP the connection went to and the sniffed domain
+    target_ip: str = "none"
+    target_domain: str = "none"
 
     @property
     def event_key(self) -> str:

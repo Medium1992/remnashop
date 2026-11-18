@@ -46,6 +46,7 @@ from src.core.utils.i18n_helpers import (
 )
 from src.core.utils.i18n_keys import ByteUnitKey
 from src.core.utils.remna_id import remna_key
+from src.core.utils.s_torrent import torrent_target
 from src.core.utils.time import datetime_now, get_traffic_reset_delta
 
 
@@ -342,6 +343,10 @@ class RemnaWebhookService:
         protocol = xray_report.protocol or "unknown"
         source = xray_report.source or "unknown"
         destination = xray_report.destination or "unknown"
+        # s edition: the IP and the sniffed domain, wherever the report has them
+        target = torrent_target(
+            xray_report.original_target, xray_report.destination, xray_report.route_target
+        )
 
         await self.event_bus.publish(
             TorrentBlockerReportEvent(
@@ -356,6 +361,8 @@ class RemnaWebhookService:
                 protocol=protocol,
                 source=source,
                 destination=destination,
+                target_ip=target.ip or "none",
+                target_domain=target.domain or "none",
             )
         )
 
@@ -371,6 +378,12 @@ class RemnaWebhookService:
                 node_name=node_name,
                 block_duration=block_duration,
                 support_url=self.bot_service.get_support_url(),
+                # s edition: the customer sees where the traffic went
+                protocol=protocol,
+                network=xray_report.network or "none",
+                source=source if source != "unknown" else "none",
+                destination=target.ip or "none",
+                domain=target.domain or "none",
             )
         )
 
@@ -390,9 +403,7 @@ class RemnaWebhookService:
             subscription = await self.subscription_dao.get_by_remna_id(remna_key(remna_user))
 
             if not subscription:
-                logger.warning(
-                    f"Subscription not found for UUID '{remna_user.id}', delete aborted"
-                )
+                logger.warning(f"Subscription not found for UUID '{remna_user.id}', delete aborted")
                 return
 
             user_id = subscription.user_id

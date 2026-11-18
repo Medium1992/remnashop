@@ -184,9 +184,15 @@ class DeviceReminders:
         i18n = self.translator_hub.get_translator_by_locale(target.user.language)
         lines = []
         sideload = False
+        platforms: set[str] = set()
         for item in target.items:
             primary = item.verdict.primary
             sideload = sideload or primary.hint == "sideload"
+            info = parse_client(item.device.user_agent, item.device.platform)
+            if info and info.platform:
+                # how to update depends on where the app came from
+                store = "android" if primary.hint != "sideload" else "sideload"
+                platforms.add(store if info.platform == "android" else info.platform)
             lines.append(
                 i18n.get(
                     "ntf-s-versions.line",
@@ -210,6 +216,10 @@ class DeviceReminders:
                 "devices": "\n".join(lines),
                 "sideload": int(sideload),
                 "value": interval_days,
+                "how_ios": int(bool(platforms & {"ios", "macos"})),
+                "how_android": int("android" in platforms),
+                "how_desktop": int(bool(platforms & {"windows", "linux"})),
+                "how_any": int(bool(platforms & {"ios", "macos", "android", "windows", "linux"})),
             },
             reply_markup=devices_keyboard(),
             disable_default_markup=False,

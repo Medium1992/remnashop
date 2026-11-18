@@ -130,7 +130,7 @@ class TestOutdated:
         )
         assert "Pixel &lt;8&gt;" in text
         assert "4.1.0 → <b>4.3.0</b>" in text
-        assert "отдельным приложением" in text  # the GitHub APK is a sideload
+        assert "отдельным приложением" in text and "Google Play" in text  # a sideload
         assert "раза в 7 дней" in text
 
 
@@ -197,3 +197,129 @@ class TestInterval:
 
         assert report.sent == 1
         assert len(notifier.sent) == 2
+
+
+class TestHowToUpdate:
+    def _text(self, hub: TranslatorHub, **flags: int) -> str:
+        kwargs: Dict[str, Any] = {
+            "devices": "• x",
+            "sideload": 0,
+            "value": 7,
+            "how_ios": 0,
+            "how_android": 0,
+            "how_desktop": 0,
+            "how_any": 0,
+            **flags,
+        }
+        return hub.get_translator_by_locale("ru").get("ntf-s-versions.outdated", **kwargs)
+
+    def test_only_the_platforms_of_the_devices_are_explained(self, hub: TranslatorHub) -> None:
+        text = self._text(hub, how_ios=1, how_any=1)
+        assert "App Store" in text and "Google Play" not in text and "установщик" not in text
+        both = self._text(hub, how_android=1, how_desktop=1, how_any=1)
+        assert "Google Play" in both and "установщик" in both and "App Store" not in both
+        assert "\\u000A" not in both and "{" not in both
+
+    def test_without_a_known_platform_it_still_says_where(self, hub: TranslatorHub) -> None:
+        assert "по ссылке выше или в магазине" in self._text(hub)
+
+    def test_a_github_android_app_is_told_to_reinstall(self, hub: TranslatorHub) -> None:
+        scan = a_scan(a_device("h1", "Happ/4.1.0/Android/1"))
+        target = collect_outdated(
+            scan, versions(happ_android="4.3.0"), merge_sources({}), SETTINGS, []
+        )[0]
+        payload = DeviceReminders(FakeRedis(), RecordingNotifier(), hub).render_outdated(target, 7)  # type: ignore[arg-type]
+        assert payload.i18n_kwargs["how_android"] == 0  # a sideload, not Google Play
+        assert payload.i18n_kwargs["sideload"] == 1
+
+
+class TestTorrentNotice:
+    def _text(self, hub: TranslatorHub, **kw: Any) -> str:
+        args: Dict[str, Any] = {
+            "node_name": "NL-1",
+            "block_duration": "5 минут",
+            "protocol": "bittorrent",
+            "network": "udp",
+            "destination": "185.1.2.3:6881",
+            "source": "10.0.0.5:51413",
+            "domain": "none",
+            **kw,
+        }
+        return hub.get_translator_by_locale("ru").get("event-torrent-blocker.user-blocked", **args)
+
+    def test_it_says_where_the_traffic_went_and_how_to_avoid_it(self, hub: TranslatorHub) -> None:
+        text = self._text(hub)
+        assert "NL-1" not in text  # node names are not for customers
+        assert "bittorrent / udp" in text
+        assert "<code>185.1.2.3:6881</code>" in text and "<code>10.0.0.5:51413</code>" in text
+        assert "5 минут" in text
+        for hint in ("Раздельное туннелирование", "qBittorrent", "лаунчеры", "iPhone"):
+            assert hint in text
+        # excluding, not closing; and no proxy modes customers won't follow
+        for advice in ("закройте", "TUN", "системный прокси", "VPN"):
+            assert advice not in text
+        assert "\\u000A" not in text and "{" not in text
+
+    def test_lines_the_node_did_not_send_are_left_out(self, hub: TranslatorHub) -> None:
+        text = self._text(hub, network="none", destination="none", source="none")
+        assert "Куда шёл трафик" not in text and "С вашего адреса" not in text
+        assert "bittorrent" in text and "/ none" not in text
+
+
+class TestTorrentTarget:
+    def test_the_ip_from_original_target_and_the_domain_from_route(self) -> None:
+        from src.core.utils.s_torrent import torrent_target  # noqa: PLC0415
+
+        target = torrent_target("tcp:185.1.2.3:6881", "185.1.2.3:6881", "tracker.example.org")
+        assert target.ip == "185.1.2.3:6881" and target.domain == "tracker.example.org"
+
+    def test_a_sniffed_domain_in_destination(self) -> None:
+        from src.core.utils.s_torrent import torrent_target  # noqa: PLC0415
+
+        target = torrent_target("udp:9.9.9.9:51413", "peer.example.net:51413", None)
+        assert target.ip == "9.9.9.9:51413" and target.domain == "peer.example.net"
+
+    def test_ipv6_and_missing_fields(self) -> None:
+        from src.core.utils.s_torrent import torrent_target  # noqa: PLC0415
+
+        assert torrent_target("tcp:[2001:db8::1]:6881", None, "unknown").ip == "[2001:db8::1]:6881"
+        empty = torrent_target(None, "unknown", "")
+        assert empty.ip is None and empty.domain is None
+
+    def test_the_port_of_a_domain_goes_with_a_bare_ip(self) -> None:
+        from src.core.utils.s_torrent import torrent_target  # noqa: PLC0415
+
+        target = torrent_target("1.2.3.4", "tracker.example.org:6969", None)
+        assert target.ip == "1.2.3.4:6969"
+
+
+def test_the_notice_shows_the_domain(hub: TranslatorHub) -> None:
+    args: Dict[str, Any] = {
+        "node_name": "NL-1",
+        "block_duration": "5 минут",
+        "protocol": "bittorrent",
+        "network": "udp",
+        "destination": "185.1.2.3:6881",
+        "domain": "tracker.example.org",
+        "source": "none",
+    }
+    text = hub.get_translator_by_locale("ru").get("event-torrent-blocker.user-blocked", **args)
+    assert "<code>185.1.2.3:6881</code>" in text and "<code>tracker.example.org</code>" in text
+    report = hub.get_translator_by_locale("ru").get(
+        "event-torrent-blocker.report",
+        user=UserDto(id=1, telegram_id=1, name="U"),
+        node_name="NL-1",
+        blocked_ip="91.200.10.20",
+        block_duration="5 минут",
+        will_unblock_at="x",
+        protocol="bittorrent",
+        source="91.200.10.20:51413",
+        destination="tracker.example.org:6881",
+        target_ip="185.1.2.3:6881",
+        target_domain="tracker.example.org",
+        telegram_id=1,
+        username="u",
+        name="U",
+        user_id=1,
+    )
+    assert "IP назначения" in report and "tracker.example.org" in report

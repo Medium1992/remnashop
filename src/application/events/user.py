@@ -112,6 +112,13 @@ class TorrentBlockedEvent(UserEvent):
     node_name: str
     block_duration: Any
     support_url: str
+    # s edition: what was seen, so the customer can find the program behind it
+    # "none" when the node didn't say
+    protocol: str = "unknown"
+    network: str = "none"
+    source: str = "none"
+    destination: str = "none"  # the IP, with the port when known
+    domain: str = "none"  # what the node sniffed, when it did
 
     @property
     def event_key(self) -> str:
