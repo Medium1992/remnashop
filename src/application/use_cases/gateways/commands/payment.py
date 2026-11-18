@@ -365,10 +365,17 @@ class ProcessPayment(Interactor[ProcessPaymentDto, None]):
                 return
 
             elif new_status == TransactionStatus.COMPLETED:
+                # s edition: CANCELED too. The bot cancels an unpaid order after
+                # 30 minutes on its own; a payment the gateway confirms later (a
+                # slow bank transfer) or an admin confirms by hand still counts.
                 updated = await self.transaction_dao.transition_status(
                     payment_id,
                     TransactionStatus.COMPLETED,
-                    (TransactionStatus.PENDING, TransactionStatus.FAILED),
+                    (
+                        TransactionStatus.PENDING,
+                        TransactionStatus.FAILED,
+                        TransactionStatus.CANCELED,
+                    ),
                 )
                 if not updated:
                     logger.warning(

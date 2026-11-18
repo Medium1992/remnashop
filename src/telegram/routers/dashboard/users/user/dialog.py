@@ -14,6 +14,8 @@ from src.telegram.routers.s.dashboard.receipts import open_user_receipts as s_op
 from src.telegram.routers.s.give_days import on_give_days_input as s_on_give_days_input
 from src.telegram.routers.s.kept import kept_admin_getter as s_kept_getter
 from src.telegram.routers.s.kept import kept_toggle as s_kept_toggle
+from src.telegram.routers.s.payment_confirm import confirm_buttons as s_confirm_buttons
+from src.telegram.routers.s.payment_confirm import confirm_getter as s_confirm_getter
 from src.telegram.routers.s.user_card import inviter_getter as s_inviter_getter
 from src.telegram.routers.s.user_card import on_open_inviter as s_on_open_inviter
 from src.telegram.states import DashboardRemnashop, DashboardUser
@@ -694,6 +696,8 @@ transactions_list = Window(
 transaction = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-user-transaction-info"),
+    I18nFormat("msg-s-payment.asked", F["s_confirm_asked"]),
+    *s_confirm_buttons(),
     Row(
         Button(
             text=I18nFormat("btn-goto.user-profile"),
@@ -719,7 +723,7 @@ transaction = Window(
     ),
     IgnoreUpdate(),
     state=DashboardUser.TRANSACTION,
-    getter=transaction_getter,
+    getter=[transaction_getter, s_confirm_getter],
 )
 
 message = Window(
