@@ -379,6 +379,37 @@ class InstallVerdict:
     def outdated(self) -> bool:
         return self.primary.behind
 
+    @property
+    def store_latest(self) -> Optional[ChannelOffer]:
+        """A store whose newest version is what is installed: from there the
+        app is up to date, whatever a newer build elsewhere (GitHub) says."""
+        if not self.outdated:
+            return None
+        return next(
+            (
+                alt
+                for alt in self.alternatives
+                if alt.latest
+                and alt.hint != "sideload"
+                and compare(self.installed, alt.latest) >= 0
+            ),
+            None,
+        )
+
+    def needs_update(self, *, ignore_patch: bool, min_minor_gap: int) -> bool:
+        """Worth a warning: behind its channel by more than a small fix, and
+        not on the newest version of a store it may well come from."""
+        return (
+            self.outdated
+            and self.store_latest is None
+            and notify_worthy(
+                self.installed,
+                self.primary.latest,
+                ignore_patch=ignore_patch,
+                min_minor_gap=min_minor_gap,
+            )
+        )
+
 
 def check_install(
     info: ClientInfo, cache: VersionsCache, sources: Sources

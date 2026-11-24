@@ -18,7 +18,7 @@ from src.infrastructure.di.providers.i18n import I18nProvider
 from src.infrastructure.di.providers.retort import RetortProvider
 from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.client_versions import ClientVersionsService
-from src.telegram.routers.s.devices import devices_extra
+from src.telegram.routers.s.devices import CARDS_KEY, device_card_getter, devices_extra
 
 
 @pytest.fixture(scope="module")
@@ -35,10 +35,12 @@ class FakeRedis:
 
 
 class FakeVersions:
+    def __init__(self) -> None:
+        self.cache = VersionsCache()
+        self.cache.channels["happ/android"] = ChannelState(version="4.3.0", status="ok")
+
     async def load(self) -> VersionsCache:
-        cache = VersionsCache()
-        cache.channels["happ/android"] = ChannelState(version="4.3.0", status="ok")
-        return cache
+        return self.cache
 
 
 class FakeBlocks:
@@ -52,11 +54,13 @@ class FakeBlocks:
 class FakeContainer:
     def __init__(self, block: Optional[UserBlockDto] = None) -> None:
         self.blocks = FakeBlocks(block)
+        self.versions = FakeVersions()
+        self.versions_cache = self.versions.cache
 
     async def get(self, kind: Any) -> Any:
         return {
             Redis: FakeRedis(),
-            ClientVersionsService: FakeVersions(),
+            ClientVersionsService: self.versions,
             BlockService: self.blocks,
         }[kind]
 
@@ -64,6 +68,7 @@ class FakeContainer:
 class FakeManager:
     def __init__(self, block: Optional[UserBlockDto] = None) -> None:
         self.middleware_data: Dict[str, Any] = {CONTAINER_NAME: FakeContainer(block)}
+        self.dialog_data: Dict[str, Any] = {}
 
 
 def settings(**on: bool) -> SettingsDto:
@@ -125,8 +130,9 @@ class TestDevicesScreen:
             a_device("stale", "Happ/4.3.0/Android/1", days_ago=10),
         ]
         formatted = labels(3)
+        manager = FakeManager()
         extra = await devices_extra(
-            FakeManager(),  # type: ignore[arg-type]
+            manager,  # type: ignore[arg-type]
             i18n,
             settings(versions=True, stale=True),
             a_subscription(device_limit=5),
@@ -134,8 +140,34 @@ class TestDevicesScreen:
             formatted,
         )
         assert [f["label"][:1] for f in formatted] == ["⚠", "✅", "⏳"]
-        assert "4.1.0 → <b>4.3.0</b>" in extra["s_devices"]
-        assert "не обновлялась 10 дней" in extra["s_devices"]
+        # the list: a short summary, pointing to the cards
+        assert "Есть обновления: <b>1</b> из <b>3</b>" in extra["s_devices"]
+        assert "Нажмите устройство" in extra["s_devices"]
+        assert "Обновите подписку</b> на <b>1</b> из <b>3</b>" in extra["s_devices"]
+        assert "4.1.0" not in extra["s_devices"]
+        # the cards: the details and what to do
+        cards = manager.dialog_data[CARDS_KEY]
+        assert "4.1.0</b> → <b>4.3.0</b>" in cards["old-app"]
+        assert "Сначала — Google Play" in cards["old-app"]  # the GitHub build
+        assert "актуальная версия" in cards["fresh"]
+        assert "Подписка не обновлялась 10 дней" in cards["stale"]
+        assert "кружок со стрелками" in cards["stale"] and "Не нужно" in cards["stale"]
+
+    async def test_the_card_window_shows_the_selected_device(self, i18n: Any) -> None:
+        manager = FakeManager()
+        await devices_extra(
+            manager,  # type: ignore[arg-type]
+            i18n,
+            settings(versions=True, stale=True),
+            a_subscription(device_limit=5),
+            [a_device("old-app", "Happ/4.1.0/Android/1")],
+            labels(1),
+        )
+        manager.dialog_data["selected_hwid"] = "old-app"
+        card = await device_card_getter(manager)  # type: ignore[arg-type]
+        assert "Доступно обновление" in card["s_device_card"]
+        manager.dialog_data["selected_hwid"] = "gone"
+        assert (await device_card_getter(manager))["s_device_card"] == ""  # type: ignore[arg-type]
 
     async def test_a_block_is_shown_and_hides_the_slot_button(self, i18n: Any) -> None:
         extra = await devices_extra(
@@ -149,3 +181,24 @@ class TestDevicesScreen:
         assert "Доступ приостановлен" in extra["s_devices"]
         assert "торренты" in extra["s_devices"]
         assert extra["s_slot_button"] == 0
+
+
+class TestStoreLatestCard:
+    async def test_a_store_version_gets_no_warning(self, i18n: Any, monkeypatch: Any) -> None:
+        manager = FakeManager()
+        cache = manager.middleware_data[CONTAINER_NAME].versions_cache
+        cache.channels["happ/android_play"] = ChannelState(version="4.1.0", status="ok")
+        formatted = labels(1)
+        extra = await devices_extra(
+            manager,  # type: ignore[arg-type]
+            i18n,
+            settings(versions=True),
+            a_subscription(device_limit=5),
+            [a_device("play", "Happ/4.1.0/Android/1")],
+            formatted,
+        )
+        assert formatted[0]["label"].startswith("✅")
+        assert "Есть обновления" not in extra["s_devices"]
+        card = manager.dialog_data[CARDS_KEY]["play"]
+        assert "последняя версия в «Android · Google Play»" in card
+        assert "обновляться не обязательно" in card and "Доступно обновление" not in card

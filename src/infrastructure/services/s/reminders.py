@@ -29,7 +29,6 @@ from src.core.utils.client_versions import (
     VersionsCache,
     app_title,
     check_install,
-    notify_worthy,
     parse_client,
 )
 from src.core.utils.time import datetime_now
@@ -108,13 +107,8 @@ def collect_outdated(
                 continue
             info = parse_client(device.user_agent, device.platform)
             verdict = check_install(info, cache, sources) if info else None
-            if verdict is None or not verdict.outdated:
-                continue
-            if not notify_worthy(
-                verdict.installed,
-                verdict.primary.latest,
-                ignore_patch=settings.ignore_patch,
-                min_minor_gap=settings.min_minor_gap,
+            if verdict is None or not verdict.needs_update(
+                ignore_patch=settings.ignore_patch, min_minor_gap=settings.min_minor_gap
             ):
                 continue
             items.append(OutdatedDevice(device=device, verdict=verdict))

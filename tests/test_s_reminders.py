@@ -323,3 +323,16 @@ def test_the_notice_shows_the_domain(hub: TranslatorHub) -> None:
         user_id=1,
     )
     assert "IP назначения" in report and "tracker.example.org" in report
+
+
+class TestStoreLatest:
+    def test_the_newest_from_the_store_is_not_outdated(self) -> None:
+        # GitHub has 4.3.0, Google Play still ships 4.1.0, and 4.1.0 is installed
+        scan = a_scan(a_device("h1", "Happ/4.1.0/Android/1"))
+        cache = versions(happ_android="4.3.0", happ_android_play="4.1.0")
+        assert collect_outdated(scan, cache, merge_sources({}), SETTINGS, []) == []
+
+    def test_older_than_the_store_is_still_outdated(self) -> None:
+        scan = a_scan(a_device("h1", "Happ/4.0.0/Android/1"))
+        cache = versions(happ_android="4.3.0", happ_android_play="4.1.0")
+        assert len(collect_outdated(scan, cache, merge_sources({}), SETTINGS, [])) == 1
