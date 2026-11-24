@@ -249,8 +249,9 @@ async def fetch_play(
     rather than regexing loose version strings -- the page is full of them, and
     the obvious ones belong to user reviews. The listed version is that of the
     last fully rolled-out release: during a staged rollout people already get a
-    newer build. So the date is published as the channel's value and the
-    number is kept out of every comparison.
+    newer build. So the number is never what an install is compared with;
+    it only tells that an install is the newest Play has listed (s edition:
+    then the app is not called outdated), and the date is shown beside it.
     """
     if not package:
         return None
@@ -271,8 +272,8 @@ async def fetch_play(
     if parsed is None:
         logger.warning(f"Google Play page for '{package}' carries no version")
         return None
-    _, updated = parsed
-    return ChannelState(display=updated, published=updated, source=f"play:{package}/{gl}")
+    listed, updated = parsed
+    return ChannelState(version=listed, published=updated, source=f"play:{package}/{gl}")
 
 
 async def fetch_channel(

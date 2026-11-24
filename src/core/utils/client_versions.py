@@ -439,7 +439,8 @@ def check_install(
             published=state.published,
             behind=bool(latest) and compare(latest, info.version) > 0,
         )
-        if primary is None and latest:
+        # an informational channel (Google Play's listing) never sets the bar
+        if primary is None and latest and not channel.get("informational"):
             primary = offer
         else:
             alternatives.append(offer)

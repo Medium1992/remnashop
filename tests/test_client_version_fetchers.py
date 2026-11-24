@@ -162,14 +162,14 @@ class TestPlay:
             "1 нояб. 2026 г.",
         )
 
-    async def test_the_channel_publishes_the_date_and_no_comparable_version(self) -> None:
+    async def test_the_channel_keeps_the_listed_version_and_its_date(self) -> None:
         page = a_play_page("3.26.3", "1 нояб. 2026 г.")
         async with client(lambda r: httpx.Response(200, text=page)) as c:
             state = await fetch_play(c, "com.happproxy")
 
         assert state is not None
-        assert state.version == ""
-        assert state.display == "1 нояб. 2026 г."
+        assert state.version == "3.26.3"  # shown and matched, never the bar
+        assert state.published == "1 нояб. 2026 г."
 
 
 class TestManual:

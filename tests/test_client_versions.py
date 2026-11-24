@@ -138,13 +138,29 @@ class TestVerdict:
     def test_play_is_never_the_comparison(self) -> None:
         # The listing said 3.26.3 while people were getting 4.3.0.
         cache = cache_with(happ_android="4.3.0")
-        cache.channels["happ/android_play"] = ChannelState(display="обновлено 1 нояб.", status="ok")
+        cache.channels["happ/android_play"] = ChannelState(version="3.26.3", status="ok")
 
         verdict = check_install(ClientInfo("happ", "4.3.0", "android"), cache, merge_sources({}))
 
         assert verdict is not None
         assert verdict.primary.channel == "android"
         assert [a.channel for a in verdict.alternatives] == ["android_play"]
+
+    def test_play_alone_never_becomes_the_bar(self) -> None:
+        cache = VersionsCache()
+        cache.channels["happ/android_play"] = ChannelState(version="4.3.0", status="ok")
+        verdict = check_install(ClientInfo("happ", "4.1.0", "android"), cache, merge_sources({}))
+        assert verdict is None
+
+    def test_the_newest_from_play_is_not_outdated(self) -> None:
+        cache = cache_with(happ_android="4.3.0")
+        cache.channels["happ/android_play"] = ChannelState(version="4.1.0", status="ok")
+        verdict = check_install(ClientInfo("happ", "4.1.0", "android"), cache, merge_sources({}))
+        assert verdict is not None and verdict.outdated
+        assert verdict.store_latest is not None
+        assert not verdict.needs_update(ignore_patch=True, min_minor_gap=1)
+        older = check_install(ClientInfo("happ", "4.0.0", "android"), cache, merge_sources({}))
+        assert older is not None and older.needs_update(ignore_patch=True, min_minor_gap=1)
 
     def test_no_usable_version_means_nothing_to_say(self) -> None:
         verdict = check_install(
