@@ -72,6 +72,7 @@ async def s_getter(
         "inactive_days": s.inactive.delete_after_days,
         "inactive_warn": s.inactive.warn_days,
         "inactive_include_disabled": int(s.inactive.include_disabled),
+        "inactive_disable_instead": int(s.inactive.disable_instead),
         "routers": "\n".join(f"<code>{h}</code>" for h in s.router_hwids) or "—",
         "routers_count": len(s.router_hwids),
         "invites_enabled": int(s.invites.enabled),

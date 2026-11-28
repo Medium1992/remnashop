@@ -33,12 +33,18 @@ async def subscription_extra(
     settings = (await (await container.get(SettingsDao)).get()).extra.s.inactive
     if not settings.enabled:
         return extra
-    if not settings.include_disabled and subscription.status == SubscriptionStatus.DISABLED:
+    disabled = subscription.status == SubscriptionStatus.DISABLED
+    if disabled and (settings.disable_instead or not settings.include_disabled):
         return extra
     since = inactive_since(subscription, datetime_now())
     if since is None:
         return extra
     i18n: TranslatorRunner = await container.get(TranslatorRunner)
     delete_on = since + timedelta(days=settings.delete_after_days)
-    extra["s_inactive"] = i18n.get("msg-s-subscription.inactive", date=local_date(delete_on))
+    key = (
+        "msg-s-subscription.inactive-disable"
+        if settings.disable_instead
+        else ("msg-s-subscription.inactive")
+    )
+    extra["s_inactive"] = i18n.get(key, date=local_date(delete_on))
     return extra

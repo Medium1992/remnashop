@@ -1,9 +1,15 @@
-"""Inactive profiles: the list, and deletion after a lapse.
+"""Inactive profiles: the list, and deletion (or switching off) after a lapse.
 
 A profile is inactive once its subscription has expired (or, if asked,
 been disabled). ``delete_after_days`` later the panel user is deleted -- link,
 devices and all -- and the subscription marked DELETED; the bot account stays,
 and a new purchase issues a new link.
+
+With ``disable_instead`` the panel user is switched off rather than deleted:
+until then the profile stays EXPIRED, so the panel can still serve hosts meant
+for expired users, and afterwards it gets nothing. Such a profile is noted in
+``s_rule_disabled``, and a renewal switches it back on; one the admin switched
+off by hand is never touched (a renewal leaves a disabled profile disabled).
 
 Nobody is deleted without warning. The warning goes out ``warn_days`` ahead,
 and deletion waits at least that long after the warning actually went out:
@@ -24,14 +30,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.application.common import Notifier
 from src.application.common.dao import SettingsDao, SubscriptionDao, UserDao
+from src.application.common.uow import UnitOfWork
 from src.application.dto import MessagePayloadDto, SubscriptionDto, UserDto
 from src.application.dto.s_settings import InactiveCleanupSettingsDto
+from src.application.events.system import UserPurchaseEvent
 from src.application.events.user import SubscriptionExpiredEvent
 from src.application.use_cases.subscription.commands.management import DeleteSubscription
 from src.core.enums import SubscriptionStatus
 from src.core.utils.s_time import DATE, tg_time
 from src.core.utils.time import datetime_now
 from src.infrastructure.database.dao.s_blocks import UserBlockDao
+from src.infrastructure.database.dao.s_rule_disabled import RuleDisabledDao
 from src.infrastructure.database.models import Subscription, User
 from src.infrastructure.redis.key_builder import serialize_storage_key
 from src.infrastructure.redis.s_keys import InactiveListKey, InactiveWarningKey
@@ -69,6 +78,7 @@ class CleanupReport:
     candidates: int = 0
     warned: int = 0
     deleted: int = 0
+    disabled: int = 0
     failed: int = 0
 
 
@@ -99,6 +109,8 @@ class InactiveProfiles:
         notifier: Notifier,
         delete_subscription: DeleteSubscription,
         block_dao: UserBlockDao,
+        uow: UnitOfWork,
+        rule_disabled_dao: RuleDisabledDao,
     ) -> None:
         self.session = session
         self.redis = redis
@@ -109,6 +121,8 @@ class InactiveProfiles:
         self.notifier = notifier
         self.delete_subscription = delete_subscription
         self.block_dao = block_dao
+        self.uow = uow
+        self.rule_disabled_dao = rule_disabled_dao
 
     async def candidates(self, include_disabled: bool) -> list[Inactive]:
         now = datetime_now()
@@ -173,9 +187,9 @@ class InactiveProfiles:
         now = datetime_now()
         # A blocked profile waits for its block to end, whatever its dates.
         excluded = (excluded_user_ids or set()) | await self.block_dao.user_ids()
-        items = [
-            i for i in await self.candidates(settings.include_disabled) if i.user.id not in excluded
-        ]
+        # switched off already: nothing more to do to it in the "disable" mode
+        include_disabled = settings.include_disabled and not settings.disable_instead
+        items = [i for i in await self.candidates(include_disabled) if i.user.id not in excluded]
         report.candidates = len(items)
         warn_for = timedelta(days=settings.warn_days)
 
@@ -192,7 +206,12 @@ class InactiveProfiles:
             ready = now >= delete_at and (warned_at is None or now >= warned_at + warn_for)
             if not ready:
                 continue
-            if await self._delete(item):
+            if settings.disable_instead:
+                if await self._disable(item):
+                    report.disabled += 1
+                else:
+                    report.failed += 1
+            elif await self._delete(item):
                 report.deleted += 1
             else:
                 report.failed += 1
@@ -206,7 +225,11 @@ class InactiveProfiles:
         await self._notify(
             item.user,
             MessagePayloadDto(
-                i18n_key="ntf-s-inactive.warning",
+                i18n_key=(
+                    "ntf-s-inactive.warning-disable"
+                    if settings.disable_instead
+                    else "ntf-s-inactive.warning"
+                ),
                 i18n_kwargs={"date": local_date(delete_on), "value": settings.warn_days},
                 reply_markup=get_renew_keyboard(),
                 disable_default_markup=False,
@@ -216,7 +239,7 @@ class InactiveProfiles:
         # Kept well past the deletion date so a slow run still finds it.
         ttl = int(timedelta(days=settings.warn_days + 30).total_seconds())
         await self.redis.set(self._warning_key(item), datetime_now().isoformat(), ex=ttl)
-        logger.info(f"Inactive profile {item.user.log} warned, deletion on {delete_on.date()}")
+        logger.info(f"Inactive profile {item.user.log} warned, action on {delete_on.date()}")
 
     async def _delete(self, item: Inactive) -> bool:
         try:
@@ -237,6 +260,68 @@ class InactiveProfiles:
         )
         return True
 
+    async def _disable(self, item: Inactive) -> bool:
+        """Switch the panel user off and note it, so a renewal switches it on."""
+        uuid = item.subscription.user_remna_id
+        try:
+            await self.remnawave.disable_user(uuid)
+        except Exception as e:
+            logger.warning(f"Inactive profile {item.user.log} not switched off: {e}")
+            return False
+        async with self.uow:
+            await self.subscription_dao.update_status(
+                item.subscription.id, SubscriptionStatus.DISABLED
+            )
+            await self.rule_disabled_dao.add(uuid, item.user.id)
+            await self.uow.commit()
+        await self.redis.delete(self._warning_key(item))
+        logger.warning(f"Inactive profile {item.user.log} switched off after lapse {item.since}")
+        await self._notify(
+            item.user,
+            MessagePayloadDto(
+                i18n_key="ntf-s-inactive.disabled",
+                reply_markup=get_renew_keyboard(),
+                disable_default_markup=False,
+                delete_after=None,
+            ),
+        )
+        return True
+
+    @on_event(UserPurchaseEvent)
+    async def on_purchase(self, event: UserPurchaseEvent) -> None:
+        """A renewal switches back on a profile this rule switched off.
+
+        The purchase leaves a disabled panel user disabled (so that one the
+        admin switched off stays off); this undoes only the rule's own doing.
+        A profile under a temporary block waits for the block to end.
+        """
+        user = await self.user_dao.get_by_id(event.user_id)
+        subscription = await self.subscription_dao.get_current(event.user_id)
+        if user is None or subscription is None:
+            return
+        uuid = subscription.user_remna_id
+        if await self.rule_disabled_dao.find(uuid) is None:
+            return
+        if subscription.status != SubscriptionStatus.DISABLED:
+            async with self.uow:
+                await self.rule_disabled_dao.remove(uuid)
+                await self.uow.commit()
+            return
+        if user.id in await self.block_dao.user_ids():
+            logger.info(f"Inactive profile {user.log} renewed while blocked: stays off")
+            return
+        try:
+            await self.remnawave.enable_user(uuid)
+        except Exception as e:
+            # stays noted: an admin sees the renewed-but-off profile in the logs
+            logger.error(f"Renewed profile {user.log} not switched back on: {e}")
+            return
+        async with self.uow:
+            await self.subscription_dao.update_status(subscription.id, SubscriptionStatus.ACTIVE)
+            await self.rule_disabled_dao.remove(uuid)
+            await self.uow.commit()
+        logger.info(f"Inactive profile {user.log} switched back on by a renewal")
+
     # ── what the user is told up front ──────────────────────────────────────
 
     @on_event(SubscriptionExpiredEvent)
@@ -254,7 +339,11 @@ class InactiveProfiles:
         await self._notify(
             user,
             MessagePayloadDto(
-                i18n_key="ntf-s-inactive.policy",
+                i18n_key=(
+                    "ntf-s-inactive.policy-disable"
+                    if settings.disable_instead
+                    else "ntf-s-inactive.policy"
+                ),
                 i18n_kwargs={
                     "date": local_date(delete_on),
                     "value": settings.delete_after_days,

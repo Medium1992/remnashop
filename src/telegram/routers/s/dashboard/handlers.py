@@ -40,6 +40,7 @@ TOGGLES = {
     "stale_enabled": "stale.enabled",
     "inactive_enabled": "inactive.enabled",
     "inactive_include_disabled": "inactive.include_disabled",
+    "inactive_disable_instead": "inactive.disable_instead",
     "invites_enabled": "invites.enabled",
     "plans_calendar": "plans.calendar_months",
     "connect_page": "connect.enabled",

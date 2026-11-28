@@ -101,3 +101,17 @@ class SReceipt(SBase):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class SRuleDisabled(SBase):
+    """A panel user the bot switched off because its subscription lapsed long
+    ago (inactive profiles, ``disable_instead``): a renewal switches it back
+    on. One the admin switched off by hand is never here."""
+
+    __tablename__ = "s_rule_disabled"
+
+    user_remna_id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    disabled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

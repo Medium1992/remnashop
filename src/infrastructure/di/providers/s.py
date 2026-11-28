@@ -9,6 +9,7 @@ from src.infrastructure.database.dao.s_blocks import UserBlockDao
 from src.infrastructure.database.dao.s_bonus import BonusDaysDao
 from src.infrastructure.database.dao.s_kept import KeptLimitsDao
 from src.infrastructure.database.dao.s_receipts import NalogAccountDao, ReceiptDao
+from src.infrastructure.database.dao.s_rule_disabled import RuleDisabledDao
 from src.infrastructure.services.s.blocks import BlockService
 from src.infrastructure.services.s.bonus import BonusDays, SGiveReferrerReward
 from src.infrastructure.services.s.client_versions import ClientVersionsService
@@ -44,6 +45,7 @@ class SProvider(Provider):
     slots = provide(source=SlotService)
     inactive = provide(source=InactiveProfiles)
     block_dao = provide(source=UserBlockDao)
+    rule_disabled_dao = provide(source=RuleDisabledDao)
     blocks = provide(source=BlockService)
     invites = provide(source=InviteLinks)
     plan_change = provide(source=PlanChange)

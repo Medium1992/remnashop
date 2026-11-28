@@ -43,7 +43,7 @@ NUMERIC = """
     kept kept_enabled s_kept_devices s_kept_traffic s_kept_squads
     receipts_enabled logged_in lost proxy_set issued waiting unissued undelivered found
     s_receipts s_receipts_on paired lone_payments lone_incomes more from_card s_inviter
-    how_ios how_android how_desktop how_any
+    how_ios how_android how_desktop how_any inactive_disable_instead
     total hours
 """
 TEXTUAL = """

@@ -245,8 +245,9 @@ inactive = Window(
     Banner(BannerName.DASHBOARD),
     I18nFormat("msg-s-dashboard.inactive"),
     Row(_toggle("inactive_enabled")),
+    Row(_toggle("inactive_disable_instead")),
     Row(_number("inactive_days"), _number("inactive_warn")),
-    Row(_toggle("inactive_include_disabled")),
+    Row(_toggle("inactive_include_disabled"), when=~F["inactive_disable_instead"]),
     Row(
         SwitchTo(
             I18nFormat("btn-s.inactive-list"), id="inactive_list", state=SDashboard.INACTIVE_LIST

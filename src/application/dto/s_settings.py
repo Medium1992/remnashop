@@ -48,6 +48,10 @@ class InactiveCleanupSettingsDto(TrackableMixin):
     delete_after_days: int = 30
     warn_days: int = 3
     include_disabled: bool = False
+    # Switch the panel user off instead of deleting it: until then the profile
+    # stays EXPIRED (the panel can still serve hosts meant for expired users),
+    # and a renewal switches it back on.
+    disable_instead: bool = False
 
 
 @dataclass(kw_only=True)
@@ -99,7 +103,7 @@ class RulesTextSettingsDto(TrackableMixin):
 
 @dataclass(kw_only=True)
 class ConnectPageSettingsDto(TrackableMixin):
-    """"Connect" opens a window with the link, its QR code and the button to open
+    """ "Connect" opens a window with the link, its QR code and the button to open
     it, instead of opening the link right away."""
 
     enabled: bool = False
